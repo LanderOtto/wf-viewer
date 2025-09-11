@@ -8,10 +8,12 @@ flake8:
 	flake8 viewer
 
 format:
-	black viewer
+	isort viewer/
+	black viewer/
 
 format-check:
-	black --diff --check viewer
+	isort --check-only  viewer/
+	black --diff --check viewer/
 
 pyupgrade:
 	pyupgrade --py3-only --py38-plus $(shell git ls-files | grep .py)

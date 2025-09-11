@@ -3,10 +3,12 @@ import re
 from datetime import timedelta
 from typing import MutableSequence
 
-from viewer.core.entity import Step, Instance
+from viewer.core.entity import Instance, Step
 from viewer.core.utils import get_path, str_to_datetime
 
-CWLTOOL_VERSIONS = ["3.1.20230601100705", "3.1.20240508115724", "3.1.20240708091337"]
+CWLTOOL_VERSIONS = [
+    "3.1.20250110105449",
+]
 
 # todo: Support different regex based on cwltool version
 job_prefix = "[job "
@@ -14,11 +16,11 @@ job_regex = rf"\{job_prefix}.+]"
 time_regex = r"\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}]"
 
 end_regex = rf".*{time_regex}.*INFO.*{job_regex} completed success$"
-path_regex = r"/([a-zA-Z0-9_-]+/{0,1})*"
+path_regex = r"/([a-zA-Z0-9_-]+/?)?"
 workflow_prefix = r"\[workflow .*]"
 
 scatter_regex = r"_[0-9]+$"
-start_regex = rf".*{time_regex}.*INFO.*{job_regex} {path_regex}\$ "
+start_regex = rf".*{time_regex}.*INFO.*{job_regex} {path_regex}.*$"
 step_start_deploy = rf".*{time_regex}.*{workflow_prefix} starting step.*"
 step_end_deploy = rf".*{time_regex}.*INFO.*{workflow_prefix} completed success$"
 version_regex = r"cwltool [0-9]+.[0-9]+.[0-9]+"
@@ -51,11 +53,12 @@ def scraping_log(input_paths: MutableSequence[str]):
     workflow_end_date = None
     for input_path in input_paths:
         filesystem = {os.sep: CWLStep(os.sep, None)}
+        workflow_name = os.sep
         # todo: define a config file and allow to associate for each path a workflow name
-        workflow_name = os.path.basename(
-            os.path.dirname(input_path.replace("_", "-"))
-        )  # str(uuid.uuid4())
-        filesystem[workflow_name] = CWLStep(workflow_name, os.sep)
+        # workflow_name = os.path.basename(
+        #     os.path.dirname(input_path.replace("_", "-"))
+        # )  # str(uuid.uuid4())
+        # filesystem[workflow_name] = CWLStep(workflow_name, os.sep)
         step_start_dict = {}
 
         with open(get_path(input_path)) as fd:
@@ -118,9 +121,7 @@ def scraping_log(input_paths: MutableSequence[str]):
                     )
         step_group_by = {}
         for job_name, (start_time, end_time) in step_start_dict.items():
-            step_name = get_full_name(
-                filesystem[get_cwl_basename(job_name)], filesystem
-            )
+            step_name = get_full_name(filesystem[job_name], filesystem)
             step_group_by.setdefault(step_name, []).append((start_time, end_time))
         for step_name, times in step_group_by.items():
             steps.append(

@@ -3,12 +3,13 @@
 import argparse
 import json
 import os
+from pathlib import PurePath
 
 from viewer.core.utils import get_path
-from viewer.render.render import plot_gantt, print_to_stdout
+from viewer.render.render import plot_gantt, show_analysis
 from viewer.translator.cwltool import scraping_log
-from viewer.translator.streamflow.report import check_and_analysis, get_steps
 from viewer.translator.streamflow.log import get_metadata_from_log
+from viewer.translator.streamflow.report import check_and_analysis, get_steps
 from viewer.translator.toil import analysis
 
 
@@ -53,7 +54,21 @@ def main(args):
             raise Exception(f"Unknown input type: {args.input_type}")
     else:
         raise Exception(f"Invalid workflow manager: {args.workflow_manager}")
-    print_to_stdout(steps, workflow_start_date, workflow_end_date)
+    stats_path = None
+    if args.stats:
+        stats_path = str(
+            PurePath(
+                get_path(args.outdir), "stats." + ("json" if args.json_stats else "txt")
+            )
+        )
+    show_analysis(
+        steps,
+        workflow_start_date,
+        workflow_end_date,
+        stats_path,
+        args.quiet,
+        args.json_stats,
+    )
     plot_gantt(
         steps, workflow_start_date, get_path(args.outdir), args.filename, args.format
     )
@@ -107,6 +122,21 @@ if __name__ == "__main__":
             choices=["streamflow", "cwltool", "cwltoil"],
             required=True,
         )
+
+        parser.add_argument(
+            "--stats",
+            help="Create a file named 'stats' on the output directory. "
+            "Default is used a custom format, you can used --json-stats",
+            action="store_true",
+        )
+
+        parser.add_argument(
+            "--json-stats",
+            help="If is used in combination with --stats. Set the JSON as format of the stats",
+            action="store_true",
+        )
+        parser.add_argument("--quiet", help="No logging on stdout", action="store_true")
+
         args = parser.parse_args()
         main(args)
     except KeyboardInterrupt:

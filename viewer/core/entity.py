@@ -17,8 +17,8 @@ class Instance:
         self.name = name
         self.location = location
 
-    def get_exec(self) -> timedelta:
-        return self.end - self.start
+    def get_exec(self) -> timedelta | None:
+        return (self.end - self.start) if self.end is not None else None
 
     def __str__(self):
         return f"{self.name} {self.start} {self.end} {self.location}"
@@ -32,11 +32,18 @@ class Step:
     def get_start(self) -> timedelta:
         return min(instance.start for instance in self.instances)
 
-    def get_end(self) -> timedelta:
-        return max(instance.end for instance in self.instances)
+    def get_end(self) -> timedelta | None:
+        if times := [
+            instance.end for instance in self.instances if instance.end is not None
+        ]:
+            return max(times)
+        else:
+            return None
 
-    def get_exec(self) -> timedelta:
-        return self.get_end() - self.get_start()
+    def get_exec(self) -> timedelta | None:
+        return (
+            (self.get_end() - self.get_start()) if self.get_end() is not None else None
+        )
 
     def __str__(self):
         return f"{self.name}. Start: {self.get_start()}. End: {self.get_end()}"

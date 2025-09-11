@@ -38,10 +38,9 @@ version = {attr = "viewer.version.VERSION"}
 [tool.setuptools.dynamic.optional-dependencies]
 lint = {file = "lint-requirements.txt"}
 
-[tool.codespell]
-ignore-words-list = "Crate,crate,NotIn,notin"
-
 [tool.coverage.run]
 branch = true
 source_pkgs = ["wf-viewer"]
 
+[tool.isort]
+profile = "black"
