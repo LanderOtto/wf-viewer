@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime
 
-from viewer.core.entity import Step, Instance
+from viewer.core.entity import Instance, Step
 from viewer.core.utils import str_to_datetime
 
 
@@ -15,6 +15,10 @@ def _get_copy_info(words, transfer_completed=False):
         dst_path = words[9 + offset]
         src_location = words[6 + offset]
         dst_location = words[12 + offset]
+    elif words[4 + offset] == "from":
+        dst_path = words[7 + offset]
+        src_location = words[9 + offset]
+        dst_location = words[9 + offset]
     elif words[11 + offset] == "local":  # remote to local
         dst_path = words[9 + offset]
         src_location = words[7 + offset]
@@ -48,6 +52,7 @@ def get_metadata_from_log(filepath):
     deployments = []
     file_copies = {}
     steps = {}
+    last_timestamp = None
     with open(filepath) as fd:
         for line in fd:
             words = [w.strip() for w in line.split(" ") if w]
@@ -97,6 +102,24 @@ def get_metadata_from_log(filepath):
                             if workflow_end is None or workflow_end < end_time:
                                 workflow_end = end_time
                             break
+            elif re.match(r".*COMPLETED Step.*", sentence):
+                step = steps.get(words[-1], None)
+                for instance in step.instances if step is not None else []:
+                    if instance.end is None:
+                        instance.end = (
+                            str_to_datetime(" ".join(words[:2])) - workflow_start
+                        )
+            try:
+                last_timestamp = str_to_datetime(" ".join(words[:2]))
+            except Exception:
+                pass
+    if workflow_end is None:
+        workflow_end = last_timestamp
+        error_end = workflow_end - workflow_start
+        for step in steps.values():
+            for instance in step.instances:
+                if instance.end is None:
+                    instance.end = error_end
     return (
         sorted(steps.values(), key=lambda x: x.get_start()),
         workflow_start,

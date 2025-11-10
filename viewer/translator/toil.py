@@ -7,7 +7,7 @@ import re
 from datetime import timedelta
 from typing import MutableMapping, MutableSequence
 
-from viewer.core.entity import Step, Instance
+from viewer.core.entity import Instance, Step
 from viewer.core.utils import str_to_datetime
 
 time_regex = r"\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{4}]"
@@ -76,22 +76,24 @@ def analysis(input_path: str):
         with open(file) as fd:
             data = json.load(fd)
         if "jobs" in data.keys():
-            time_search = re.search(time_regex, data["logs"]["messages"][0])
-            job_start = str_to_datetime(
-                data["logs"]["messages"][0][
-                    time_search.start() + 1 : time_search.end() - 1
-                ]
-            )
-            if workflow_start is None or job_start < workflow_start:
-                workflow_start = job_start
-            time_search = re.search(time_regex, data["logs"]["messages"][-1])
-            job_end = str_to_datetime(
-                data["logs"]["messages"][-1][
-                    time_search.start() + 1 : time_search.end() - 1
-                ]
-            )
-            if workflow_end is None or job_end > workflow_end:
-                workflow_end = job_end
+            job_start = None
+            if "log" in data.keys():
+                time_search = re.search(time_regex, data["logs"]["messages"][0])
+                job_start = str_to_datetime(
+                    data["logs"]["messages"][0][
+                        time_search.start() + 1 : time_search.end() - 1
+                    ]
+                )
+                if workflow_start is None or job_start < workflow_start:
+                    workflow_start = job_start
+                time_search = re.search(time_regex, data["logs"]["messages"][-1])
+                job_end = str_to_datetime(
+                    data["logs"]["messages"][-1][
+                        time_search.start() + 1 : time_search.end() - 1
+                    ]
+                )
+                if workflow_end is None or job_end > workflow_end:
+                    workflow_end = job_end
 
             for job in data["jobs"]:
                 if len(parts := job["class_name"].split(" ")) == 2:
@@ -119,7 +121,7 @@ def analysis(input_path: str):
                 #                 filesystem[child_name] = CWLStep(child_name, identifier or os.sep)
 
                 # Take start and end times
-                if parts[0] == "CWLJob":
+                if parts[0] == "CWLJob" and job_start:
                     toil_jobs.setdefault(identifier, {"start_time": [], "end_time": []})
                     toil_jobs[identifier]["start_time"].append(job_start)
                     toil_jobs[identifier]["end_time"].append(job_end)
