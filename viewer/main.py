@@ -47,9 +47,8 @@ def main(args):
             steps, workflow_start_date, workflow_end_date = analysis(
                 get_path(args.inputs[0])
             )
-
         elif args.input_type == "log":
-            raise Exception("cwltool does not have an execution report")
+            raise NotImplementedError
         else:
             raise Exception(f"Unknown input type: {args.input_type}")
     else:

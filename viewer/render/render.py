@@ -6,12 +6,61 @@ import sys
 from datetime import datetime, timedelta
 from typing import MutableSequence
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 
 from viewer.core.entity import Step
 from viewer.render.utils import multi_print, print_split_section
+
+
+def plot_barh(df):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    start = min(row["Start"] for _, row in df.iterrows())
+    step_names = df["Step"].unique()
+    # colors = plt.cm.get_cmap("tab20", len(step_names))
+    colors = plt.cm.get_cmap("Accent", len(step_names))
+    step_color_map = {step: colors(i) for i, step in enumerate(step_names)}
+    for k, vs in step_color_map.items():
+        print(k, [v*255 for v in vs])
+    for _, row in df.iterrows():
+        ax.barh(
+            row["Task"],
+            (row["Finish"] - row["Start"]).total_seconds(),
+            left=(row["Start"] - start).total_seconds(),
+            height=0.5,
+            color=step_color_map[row["Step"]],
+        )
+
+    ax.set_xlim(right=250)
+    ax.set_xlabel("Time (seconds)", fontsize=18)
+    ax.set_yticks([])
+    handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=step_color_map[step],
+            markersize=10,
+        )
+        for step in step_names
+    ]
+    ax.legend(
+        handles,
+        step_names,
+        title="Steps",
+        loc="lower right",
+        fontsize=18,
+        title_fontsize=20,
+        bbox_to_anchor=(1, 0),
+        frameon=False,
+    )
+    plt.xticks(rotation=45, fontsize=18)
+    ax.grid(True, which="both", axis="x", linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_gantt(
@@ -21,37 +70,47 @@ def plot_gantt(
     filename: str,
     format: str,
 ) -> None:
-    group_by_step = False # todo: add param
-    if group_by_step:
+    streamflow_style = True  # todo: add param
+    if streamflow_style:
+        group_by_step = False
+        i = 0
+        for step in steps:
+            for job in step.instances:
+                job.name = str(i)
+                i += 1
         df = pd.DataFrame(
             [
                 dict(
-                    Task=step.name,
-                    Start=workflow_start_date + step.get_start(),
-                    Finish=workflow_start_date + step.get_end(),
-                    Jobs=len(step.instances),
-                )
-                for step in steps
-            ]
-        )
-        fig = px.timeline(
-            df, x_start="Start", x_end="Finish", y="Task", text="Jobs", color="Task"
-        )
-    else:
-        df = pd.DataFrame(
-            [
-                dict(
-                    Task=step.name,
+                    Step=step.name,
                     Start=workflow_start_date + job.start,
                     Finish=workflow_start_date + job.end,
-                    Jobs="",
+                    Task=job.name,
                 )
                 for step in steps
                 for job in step.instances
             ]
         )
         fig = px.timeline(
-            df, x_start="Start", x_end="Finish", y="Task", text="Jobs", color="Task"
+            df,
+            x_start="Start",
+            x_end="Finish",
+            y="Step" if group_by_step else "Task",
+            color="Step",
+        )
+    else:
+        df = pd.DataFrame(
+            [
+                dict(
+                    Step=step.name,
+                    Start=workflow_start_date + step.get_start(),
+                    Finish=workflow_start_date + step.get_end(),
+                    Tasks=len(step.instances),
+                )
+                for step in steps
+            ]
+        )
+        fig = px.timeline(
+            df, x_start="Start", x_end="Finish", y="Step", text="Tasks", color="Step"
         )
     fig.update_yaxes(visible=False)
     _, ext = os.path.splitext(filename)
@@ -59,6 +118,11 @@ def plot_gantt(
         outdir, filename if f".{format}" == ext else f"{filename}.{format}"
     )
     pio.write_html(fig, output_filepath)
+    plot_barh(df)
+    # format_="png"
+    # pio.write_image(fig, format=format_, file=os.path.join(
+    #     outdir, filename if f".{format_}" == ext else f"{filename}.{format_}"
+    # ))
     print(f"Created file {output_filepath}")
 
 

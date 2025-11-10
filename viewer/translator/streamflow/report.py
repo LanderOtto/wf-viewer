@@ -10,21 +10,28 @@ from viewer.core.entity import Instance, Step
 from viewer.core.utils import str_to_datetime
 
 
+def get_x(elem):
+    new_elem_x = []
+    if isinstance(elem["x"], list):
+        for x in elem["x"]:
+            if isinstance(x, dict):
+                new_elem_x.extend(
+                    np.frombuffer(base64.b64decode(x["bdata"]), dtype=x["dtype"])
+                )
+        if len(new_elem_x) == 0:
+            new_elem_x = elem["x"]
+    elif isinstance(elem["x"], dict):
+        new_elem_x = np.frombuffer(
+            base64.b64decode(elem["x"]["bdata"]), dtype=elem["x"]["dtype"]
+        )
+    return new_elem_x
+
+
 def check_and_analysis(data: MutableMapping[str, Any]) -> tuple[datetime, datetime]:
     workflow_start_date, workflow_end_date = None, None
     for elem in data["data"]:
         # elem["x"] is expressed in milliseconds
-        new_elem_x = []
-        if isinstance(elem["x"], list):
-            for x in elem["x"]:
-                if isinstance(x, dict):
-                    new_elem_x.extend(
-                        np.frombuffer(base64.b64decode(x["bdata"]), dtype=x["dtype"])
-                    )
-        elif isinstance(elem["x"], dict):
-            new_elem_x = np.frombuffer(
-                base64.b64decode(elem["x"]["bdata"]), dtype=elem["x"]["dtype"]
-            )
+        new_elem_x = get_x(elem)
         for start_date_str, exec_time in zip(elem["base"], new_elem_x):
             if not (curr_start := str_to_datetime(start_date_str)):
                 raise Exception(f"Step {elem['name']} does not have a start date")
@@ -48,17 +55,7 @@ def get_steps(
     steps = []
     for elem in data["data"]:
         instances = []
-        new_elem_x = []
-        if isinstance(elem["x"], list):
-            for x in elem["x"]:
-                if isinstance(x, dict):
-                    new_elem_x.extend(
-                        np.frombuffer(base64.b64decode(x["bdata"]), dtype=x["dtype"])
-                    )
-        elif isinstance(elem["x"], dict):
-            new_elem_x = np.frombuffer(
-                base64.b64decode(elem["x"]["bdata"]), dtype=elem["x"]["dtype"]
-            )
+        new_elem_x = get_x(elem)
         for start_date_str, exec_time in zip(elem["base"], new_elem_x):
             instance_start_date = str_to_datetime(start_date_str)
             instance_end_date = datetime.fromtimestamp(
