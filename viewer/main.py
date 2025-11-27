@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import PurePath
 
 from viewer.core.utils import get_path
@@ -13,7 +14,7 @@ from viewer.translator.streamflow.report import check_and_analysis, get_steps
 from viewer.translator.toil import analysis
 
 
-def main(args):
+def _main(args) -> int:
     if args.workflow_manager != "cwltool" and len(args.inputs) > 1:
         raise NotImplementedError(
             f"Only cwltool supports list of input files. Define a single input file for {args.workflow_manager}"
@@ -68,12 +69,15 @@ def main(args):
         args.quiet,
         args.json_stats,
     )
+    if len(steps) == 0:
+        raise Exception("No steps found")
     plot_gantt(
         steps, workflow_start_date, get_path(args.outdir), args.filename, args.format
     )
+    return 0
 
 
-if __name__ == "__main__":
+def main(args) -> int:
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument(
@@ -136,7 +140,16 @@ if __name__ == "__main__":
         )
         parser.add_argument("--quiet", help="No logging on stdout", action="store_true")
 
-        args = parser.parse_args()
-        main(args)
+        args_parsed = parser.parse_args(args)
+        return _main(args_parsed)
     except KeyboardInterrupt:
         print()
+    return 1
+
+
+def run() -> int:
+    return main(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
