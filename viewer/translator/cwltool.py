@@ -8,6 +8,7 @@ from viewer.core.utils import get_path, str_to_datetime
 
 CWLTOOL_VERSIONS = [
     "3.1.20250110105449",
+    "3.1.20251031082601",
 ]
 
 # todo: Support different regex based on cwltool version
@@ -64,18 +65,20 @@ def scraping_log(input_paths: MutableSequence[str]):
         with open(get_path(input_path)) as fd:
             for line in fd:
                 if workflow_start_date is None:
-                    time_search = re.search(time_regex, line)
-                    workflow_start_date = str_to_datetime(
-                        line[time_search.start() + 1 : time_search.end() - 1]
-                    )
-                    version_search = re.search(version_regex, line)
-                    _, version = line[
-                        version_search.start() : version_search.end()
-                    ].split(" ")
-                    if version not in CWLTOOL_VERSIONS:
-                        raise Exception(
-                            f"cwltool version {version} log not supported/tested"
+                    if time_search := re.search(time_regex, line):
+                        workflow_start_date = str_to_datetime(
+                            line[time_search.start() + 1 : time_search.end() - 1]
                         )
+                        version_search = re.search(version_regex, line)
+                        _, version = line[
+                            version_search.start() : version_search.end()
+                        ].split(" ")
+                        if version not in CWLTOOL_VERSIONS:
+                            raise Exception(
+                                f"cwltool version {version} log not supported/tested"
+                            )
+                    else:
+                        raise Exception("Execute cwltool with the flag `--timestamps`")
                 elif re.match(step_start_deploy, line):
                     parent_match = re.search(workflow_prefix, line)
                     child_match = re.search("starting step .*$", line)

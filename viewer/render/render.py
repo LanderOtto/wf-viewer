@@ -23,7 +23,7 @@ def plot_barh(df):
     colors = plt.cm.get_cmap("Accent", len(step_names))
     step_color_map = {step: colors(i) for i, step in enumerate(step_names)}
     for k, vs in step_color_map.items():
-        print(k, [v*255 for v in vs])
+        print(k, [v * 255 for v in vs])
     for _, row in df.iterrows():
         ax.barh(
             row["Task"],
@@ -33,7 +33,7 @@ def plot_barh(df):
             color=step_color_map[row["Step"]],
         )
 
-    ax.set_xlim(right=250)
+    # ax.set_xlim(right=250)
     ax.set_xlabel("Time (seconds)", fontsize=18)
     ax.set_yticks([])
     handles = [
@@ -72,7 +72,7 @@ def plot_gantt(
 ) -> None:
     streamflow_style = True  # todo: add param
     if streamflow_style:
-        group_by_step = False
+        group_by_step = True
         i = 0
         for step in steps:
             for job in step.instances:
