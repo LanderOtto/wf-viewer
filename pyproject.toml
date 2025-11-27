@@ -20,7 +20,7 @@ classifiers = [
 dynamic = ["dependencies", "optional-dependencies", "version"]
 
 [project.scripts]
-streamflow = "viewer.main:run"
+wf-viewer = "viewer.main:run"
 
 [tool.setuptools]
 packages = [
