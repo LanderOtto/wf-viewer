@@ -15,7 +15,7 @@ from viewer.core.entity import Step
 from viewer.render.utils import multi_print, print_split_section
 
 
-def plot_barh(df):
+def plot_barh(df,  filepath):
     fig, ax = plt.subplots(figsize=(10, 6))
     start = min(row["Start"] for _, row in df.iterrows())
     step_names = df["Step"].unique()
@@ -60,6 +60,7 @@ def plot_barh(df):
     plt.xticks(rotation=45, fontsize=18)
     ax.grid(True, which="both", axis="x", linestyle="--", alpha=0.5)
     plt.tight_layout()
+    plt.savefig(filepath)
     plt.show()
 
 
@@ -117,8 +118,10 @@ def plot_gantt(
     output_filepath = os.path.join(
         outdir, filename if f".{format}" == ext else f"{filename}.{format}"
     )
-    pio.write_html(fig, output_filepath)
-    plot_barh(df)
+    if format == "html":
+        pio.write_html(fig, output_filepath)
+    else:
+        plot_barh(df, output_filepath)
     # format_="png"
     # pio.write_image(fig, format=format_, file=os.path.join(
     #     outdir, filename if f".{format_}" == ext else f"{filename}.{format_}"
