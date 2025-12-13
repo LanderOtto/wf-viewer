@@ -6,7 +6,7 @@ from typing import Any, MutableMapping, MutableSequence
 
 import numpy as np
 
-from viewer.core.entity import Instance, Step
+from viewer.core.entity import Step, Task
 from viewer.core.utils import str_to_datetime
 
 
@@ -62,7 +62,7 @@ def get_steps(
                 datetime.timestamp(instance_start_date) + exec_time / 1000
             )
             instances.append(
-                Instance(
+                Task(
                     instance_start_date - workflow_start_date,
                     instance_end_date - workflow_start_date,
                 )

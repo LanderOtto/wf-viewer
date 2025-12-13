@@ -7,7 +7,7 @@ import re
 from datetime import timedelta
 from typing import MutableMapping, MutableSequence
 
-from viewer.core.entity import Instance, Step
+from viewer.core.entity import Step, Task
 from viewer.core.utils import str_to_datetime
 
 time_regex = r"\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{4}]"
@@ -135,7 +135,7 @@ def analysis(input_path: str):
             Step(
                 name,
                 [
-                    Instance(
+                    Task(
                         start - workflow_start,
                         (
                             end - workflow_start

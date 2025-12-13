@@ -15,23 +15,35 @@ from viewer.core.entity import Step
 from viewer.render.utils import multi_print, print_split_section
 
 
-def plot_barh(df,  filepath):
+def plot_barh(df, color_palet, group_by_step, filepath):
     fig, ax = plt.subplots(figsize=(10, 6))
     start = min(row["Start"] for _, row in df.iterrows())
     step_names = df["Step"].unique()
-    # colors = plt.cm.get_cmap("tab20", len(step_names))
-    colors = plt.cm.get_cmap("Accent", len(step_names))
+    colors = plt.cm.get_cmap(color_palet, len(step_names))
+    # colors = plt.cm.get_cmap("Accent", len(step_names))
     step_color_map = {step: colors(i) for i, step in enumerate(step_names)}
-    for k, vs in step_color_map.items():
-        print(k, [v * 255 for v in vs])
+    # for k, vs in step_color_map.items():
+    #     print(k, [v * 255 for v in vs])
     for _, row in df.iterrows():
         ax.barh(
-            row["Task"],
+            row["Step"] if group_by_step else row["Task"],
             (row["Finish"] - row["Start"]).total_seconds(),
             left=(row["Start"] - start).total_seconds(),
             height=0.5,
             color=step_color_map[row["Step"]],
+            label=row["NTasks"] if "NTasks" in row else "",
         )
+        if group_by_step == "aggregate":
+            ax.text(
+                (row["Start"] - start).total_seconds() + 1,
+                row["Step"],
+                row["NTasks"],
+                ha="left",
+                va="center",
+                color="black",
+                fontsize=14,
+                fontweight="bold",
+            )
 
     # ax.set_xlim(right=250)
     ax.set_xlabel("Time (seconds)", fontsize=18)
@@ -67,65 +79,73 @@ def plot_barh(df,  filepath):
 def plot_gantt(
     steps: MutableSequence[Step],
     workflow_start_date: datetime,
+    group_by_step: str | None,
+    color_palet: str,
     outdir: str,
     filename: str,
     format: str,
 ) -> None:
-    streamflow_style = True  # todo: add param
-    if streamflow_style:
-        group_by_step = True
+    fig = None
+    if group_by_step is None or group_by_step == "individual":
         i = 0
         for step in steps:
             for job in step.instances:
                 job.name = str(i)
                 i += 1
+                if job.end_time is None:
+                    raise Exception(f"Job {job.name} has no end time")
         df = pd.DataFrame(
             [
                 dict(
                     Step=step.name,
-                    Start=workflow_start_date + job.start,
-                    Finish=workflow_start_date + job.end,
+                    Start=workflow_start_date + job.start_time,
+                    Finish=workflow_start_date + job.end_time,
                     Task=job.name,
                 )
                 for step in steps
                 for job in step.instances
             ]
         )
-        fig = px.timeline(
-            df,
-            x_start="Start",
-            x_end="Finish",
-            y="Step" if group_by_step else "Task",
-            color="Step",
-        )
-    else:
+        if format == "html":
+            fig = px.timeline(
+                df,
+                x_start="Start",
+                x_end="Finish",
+                y="Step" if group_by_step else "Task",
+                color="Step",
+            )
+    elif group_by_step == "aggregate":
         df = pd.DataFrame(
             [
                 dict(
                     Step=step.name,
                     Start=workflow_start_date + step.get_start(),
                     Finish=workflow_start_date + step.get_end(),
-                    Tasks=len(step.instances),
+                    NTasks=len(step.instances),
                 )
                 for step in steps
             ]
         )
-        fig = px.timeline(
-            df, x_start="Start", x_end="Finish", y="Step", text="Tasks", color="Step"
-        )
-    fig.update_yaxes(visible=False)
+        if format == "html":
+            fig = px.timeline(
+                df,
+                x_start="Start",
+                x_end="Finish",
+                y="Step",
+                text="NTasks",
+                color="Step",
+            )
+    else:
+        raise Exception(f"Unknown group_by_step: {group_by_step}")
     _, ext = os.path.splitext(filename)
     output_filepath = os.path.join(
         outdir, filename if f".{format}" == ext else f"{filename}.{format}"
     )
     if format == "html":
+        fig.update_yaxes(visible=False)
         pio.write_html(fig, output_filepath)
     else:
-        plot_barh(df, output_filepath)
-    # format_="png"
-    # pio.write_image(fig, format=format_, file=os.path.join(
-    #     outdir, filename if f".{format_}" == ext else f"{filename}.{format_}"
-    # ))
+        plot_barh(df, color_palet, group_by_step, output_filepath)
     print(f"Created file {output_filepath}")
 
 
@@ -145,7 +165,7 @@ def _default_format(
         multi_print(
             f"End time:       {step.get_end()}", file_descriptors=file_descriptors
         )
-        step_exec = step.get_exec()
+        step_exec = step.get_duration()
         str_step_exec_seconds = (
             f"{step_exec.total_seconds():.4f}" if step_exec is not None else None
         )
@@ -155,17 +175,21 @@ def _default_format(
         )
         if len(step.instances) > 1:
             # tempo che intercorre tra il deploy della prima istanza e l'ultima
-            first_instance_deploy = min(instance.start for instance in step.instances)
-            last_instance_deploy = max(instance.start for instance in step.instances)
+            first_instance_deploy = min(
+                instance.start_time for instance in step.instances
+            )
+            last_instance_deploy = max(
+                instance.start_time for instance in step.instances
+            )
             instance_deploy_time = last_instance_deploy - first_instance_deploy
             multi_print(
                 f"Instance deploy time:   {instance_deploy_time} = {instance_deploy_time.total_seconds():.4f} seconds",
                 file_descriptors=file_descriptors,
             )
             instance_exec = [
-                instance.get_exec()
+                instance.get_duration()
                 for instance in step.instances
-                if instance.get_exec() is not None
+                if instance.get_duration() is not None
             ]
             min_instance_exec = min(instance_exec) if instance_exec else None
             str_min_instance_seconds = (

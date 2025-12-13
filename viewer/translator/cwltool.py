@@ -3,7 +3,7 @@ import re
 from datetime import timedelta
 from typing import MutableSequence
 
-from viewer.core.entity import Instance, Step
+from viewer.core.entity import Step, Task
 from viewer.core.utils import get_path, str_to_datetime
 
 CWLTOOL_VERSIONS = [
@@ -131,7 +131,7 @@ def scraping_log(input_paths: MutableSequence[str]):
                 Step(
                     step_name,
                     [
-                        Instance(
+                        Task(
                             start_time,
                             (
                                 end_time
