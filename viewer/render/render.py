@@ -15,15 +15,15 @@ from viewer.core.entity import Step
 from viewer.render.utils import multi_print, print_split_section
 
 
-def plot_barh(df, color_palet, group_by_step, filepath):
+def plot_barh(df, color_palet, group_by_step, filepath, args):
     fig, ax = plt.subplots(figsize=(10, 6))
     start = min(row["Start"] for _, row in df.iterrows())
     step_names = df["Step"].unique()
     colors = plt.cm.get_cmap(color_palet, len(step_names))
     # colors = plt.cm.get_cmap("Accent", len(step_names))
     step_color_map = {step: colors(i) for i, step in enumerate(step_names)}
-    # for k, vs in step_color_map.items():
-    #     print(k, [v * 255 for v in vs])
+    for k, vs in step_color_map.items():
+        print(k, [v * 255 for v in vs])
     for _, row in df.iterrows():
         ax.barh(
             row["Step"] if group_by_step else row["Task"],
@@ -59,16 +59,18 @@ def plot_barh(df, color_palet, group_by_step, filepath):
         )
         for step in step_names
     ]
-    ax.legend(
-        handles,
-        step_names,
-        title="Steps",
-        loc="lower right",
-        fontsize=18,
-        title_fontsize=20,
-        bbox_to_anchor=(1, 0),
-        frameon=False,
-    )
+    if args.legend:
+        ax.legend(
+            handles,
+            step_names,
+            title="Steps",
+            loc="lower right",
+            fontsize=18,
+            title_fontsize=20,
+            bbox_to_anchor=(1, 0),
+            frameon=False,
+            ncol=1,
+        )
     plt.xticks(rotation=45, fontsize=18)
     ax.grid(True, which="both", axis="x", linestyle="--", alpha=0.5)
     plt.tight_layout()
@@ -84,6 +86,7 @@ def plot_gantt(
     outdir: str,
     filename: str,
     format: str,
+args
 ) -> None:
     fig = None
     if group_by_step is None or group_by_step == "individual":
@@ -145,7 +148,7 @@ def plot_gantt(
         fig.update_yaxes(visible=False)
         pio.write_html(fig, output_filepath)
     else:
-        plot_barh(df, color_palet, group_by_step, output_filepath)
+        plot_barh(df, color_palet, group_by_step, output_filepath, args)
     print(f"Created file {output_filepath}")
 
 

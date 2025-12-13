@@ -79,6 +79,7 @@ def _main(args) -> int:
         outdir=get_path(args.outdir),
         filename=args.filename,
         format=args.format,
+        args=args
     )
     return 0
 
@@ -122,6 +123,12 @@ def main(args) -> int:
             type=str,
             default=None,
             choices=["individual", "aggregate"],
+        )
+        parser.add_argument(
+            "-l",
+            "--legend",
+            help="Show legend",
+            action="store_true",
         )
         parser.add_argument(
             "-o",
