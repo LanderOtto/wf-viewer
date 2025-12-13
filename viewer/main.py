@@ -93,7 +93,7 @@ def main(args) -> int:
             help="filename",
             type=str,
             default="html",
-            choices=["html"],
+            choices=["html", "pdf", "eps"],
         )
         parser.add_argument(
             "-i",
