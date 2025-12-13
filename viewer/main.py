@@ -72,7 +72,13 @@ def _main(args) -> int:
     if len(steps) == 0:
         raise Exception("No steps found")
     plot_gantt(
-        steps, workflow_start_date, get_path(args.outdir), args.filename, args.format
+        steps=steps,
+        workflow_start_date=workflow_start_date,
+        color_palet=args.color_palet,
+        group_by_step=args.group_by_step,
+        outdir=get_path(args.outdir),
+        filename=args.filename,
+        format=args.format,
     )
     return 0
 
@@ -101,6 +107,21 @@ def main(args) -> int:
             action="append",
             required=True,
             type=str,
+        )
+        parser.add_argument(
+            "-p",
+            "--color-palet",
+            type=str,
+            default="tab20",
+            help="Color palette (https://matplotlib.org/stable/gallery/color/colormap_reference.html)",
+        )
+        parser.add_argument(
+            "-g",
+            "--group-by-step",
+            help="Group by step",
+            type=str,
+            default=None,
+            choices=["individual", "aggregate"],
         )
         parser.add_argument(
             "-o",
