@@ -79,7 +79,7 @@ def _main(args) -> int:
         outdir=get_path(args.outdir),
         filename=args.filename,
         format=args.format,
-        args=args
+        args=args,
     )
     return 0
 
@@ -90,14 +90,14 @@ def main(args) -> int:
         parser.add_argument(
             "-n",
             "--filename",
-            help="filename",
+            help="The base name for the output file (default: %(default)s)",
             type=str,
             default="gantt",
         )
         parser.add_argument(
             "-f",
             "--format",
-            help="filename",
+            help="The file format for the output chart (default: %(default)s)",
             type=str,
             default="html",
             choices=["html", "pdf", "eps"],
@@ -108,18 +108,19 @@ def main(args) -> int:
             action="append",
             required=True,
             type=str,
+            help="Path to input files. Can be used multiple times to include multiple logs.",
         )
         parser.add_argument(
             "-p",
             "--color-palet",
             type=str,
             default="tab20",
-            help="Color palette (https://matplotlib.org/stable/gallery/color/colormap_reference.html)",
+            help="Matplotlib color palette to use (see: https://matplotlib.org/stable/gallery/color/colormap_reference.html)",
         )
         parser.add_argument(
             "-g",
             "--group-by-step",
-            help="Group by step",
+            help="Method to group workflow steps in the visualization",
             type=str,
             default=None,
             choices=["individual", "aggregate"],
@@ -127,20 +128,20 @@ def main(args) -> int:
         parser.add_argument(
             "-l",
             "--legend",
-            help="Show legend",
+            help="Include a legend in the generated chart",
             action="store_true",
         )
         parser.add_argument(
             "-o",
             "--outdir",
-            help="Output directory",
+            help="Directory where results will be saved (default: current directory)",
             type=str,
             default=os.getcwd(),
         )
         parser.add_argument(
             "-t",
             "--input-type",
-            help="type of input file",
+            help="The format of the input file(s) being processed",
             type=str,
             choices=["report", "log"],
             required=True,
@@ -148,7 +149,7 @@ def main(args) -> int:
         parser.add_argument(
             "-w",
             "--workflow-manager",
-            help="workflow manager output to analysis",
+            help="The workflow engine that produced the input logs",
             type=str,
             choices=["streamflow", "cwltool", "cwltoil"],
             required=True,
@@ -156,17 +157,18 @@ def main(args) -> int:
 
         parser.add_argument(
             "--stats",
-            help="Create a file named 'stats' on the output directory. "
-            "Default is used a custom format, you can used --json-stats",
+            help="Generate a statistics file in the output directory. Defaults to a custom text format.",
             action="store_true",
         )
 
         parser.add_argument(
             "--json-stats",
-            help="If is used in combination with --stats. Set the JSON as format of the stats",
+            help="Format the statistics file as JSON (must be used in combination with --stats)",
             action="store_true",
         )
-        parser.add_argument("--quiet", help="No logging on stdout", action="store_true")
+        parser.add_argument(
+            "--quiet", help="Suppress all logging output to stdout", action="store_true"
+        )
 
         args_parsed = parser.parse_args(args)
         return _main(args_parsed)
