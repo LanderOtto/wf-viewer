@@ -108,11 +108,19 @@ def get_metadata_from_log(filepath: str):
                             break
             elif re.match(r".*COMPLETED Step.*", sentence):
                 step = steps.get(words[-1], None)
+                missing_log = False
                 for instance in step.instances if step is not None else []:
                     if instance.end_time is None:
+                        missing_log = True
                         instance.end_time = (
                             str_to_datetime(" ".join(words[:2])) - workflow_start
                         )
+                if missing_log:
+                    print(
+                        f"WARNING: The step {step.name} completed, but the termination logs for some instances are missing. "
+                        "A parsing error likely occurred. "
+                        "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
+                    )
             elif re.match(r".*Scheduled job .* with job id .*", sentence):
                 if os.path.dirname(words[5]) in steps.keys():
                     for instance in steps[os.path.dirname(words[5])].instances:
@@ -130,10 +138,16 @@ def get_metadata_from_log(filepath: str):
                                     instance.location, []
                                 ).append(words[9])
             try:
-                last_timestamp = str_to_datetime(" ".join(words[:2]))
+                if (tmp_timestamp := str_to_datetime(" ".join(words[:2]))) is not None:
+                    last_timestamp = tmp_timestamp
             except Exception:
                 pass
     if workflow_end is None:
+        print(
+            "WARNING: the workflow end time is missing. "
+            "A parsing error likely occurred. "
+            "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
+        )
         workflow_end = last_timestamp
         error_end = workflow_end - workflow_start
         for step in steps.values():
