@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime
-from typing import MutableSequence
+from collections.abc import MutableSequence
 
 from viewer.core.entity import Step, Task, TransferData
 from viewer.core.utils import str_to_datetime

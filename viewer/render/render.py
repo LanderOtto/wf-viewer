@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import os
 import statistics
 import sys
+from collections.abc import MutableSequence
 from datetime import datetime, timedelta
-from typing import MutableSequence
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -86,7 +87,7 @@ def plot_gantt(
     outdir: str,
     filename: str,
     format: str,
-args
+    args: argparse.Namespace,
 ) -> None:
     fig = None
     if group_by_step is None or group_by_step == "individual":

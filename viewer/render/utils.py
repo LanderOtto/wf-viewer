@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import MutableSequence
+from collections.abc import MutableSequence
 
 
 def multi_print(

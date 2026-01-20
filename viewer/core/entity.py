@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, MutableSequence
 from datetime import timedelta
 from enum import Enum
-from typing import MutableSequence
 
 
 class TaskStatus(Enum):
