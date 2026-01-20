@@ -1,7 +1,7 @@
 import os
 import re
+from collections.abc import MutableSequence
 from datetime import timedelta
-from typing import MutableSequence
 
 from viewer.core.entity import Step, Task
 from viewer.core.utils import get_path, str_to_datetime

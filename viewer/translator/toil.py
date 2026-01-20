@@ -4,8 +4,8 @@ import glob
 import json
 import os.path
 import re
+from collections.abc import MutableMapping, MutableSequence
 from datetime import timedelta
-from typing import MutableMapping, MutableSequence
 
 from viewer.core.entity import Step, Task
 from viewer.core.utils import str_to_datetime

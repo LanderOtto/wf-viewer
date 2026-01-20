@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import MutableMapping, MutableSequence
 from datetime import datetime
-from typing import Any, MutableMapping, MutableSequence
+from typing import Any
 
 import numpy as np
 

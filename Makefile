@@ -16,4 +16,4 @@ format-check:
 	black --diff --check viewer/
 
 pyupgrade:
-	pyupgrade --py3-only --py38-plus $(shell git ls-files | grep .py)
+	pyupgrade --py3-only --py310-plus $(shell git ls-files | grep .py)
