@@ -1,11 +1,40 @@
 from __future__ import annotations
 
 import os
+import posixpath
 import re
-from collections.abc import MutableSequence
+from collections.abc import MutableMapping, MutableSequence
+from pathlib import PurePath
 
-from viewer.core.entity import Step, Task, TransferData
+from viewer.core.entity import Step, Task, TransferData, Workflow
 from viewer.core.utils import str_to_datetime
+
+
+class FileNode:
+    def __init__(self, name: str):
+        self.name: str = name
+        self.children: MutableMapping[str, FileNode] = {}
+
+    def add_child(self, name: str) -> FileNode:
+        if name not in self.children:
+            self.children[name] = FileNode(name)
+        return self.children[name]
+
+    def get_child(self, name: str) -> FileNode | None:
+        return self.children.get(name)
+
+
+class FileSystem:
+    def __init__(self, name: str):
+        self.name: str = name
+        self.root: FileNode = FileNode(posixpath.sep)
+
+    def add(self, path: str):
+        if not (p := PurePath(path)).is_absolute():
+            raise ValueError(f"Path {p} must be absolute.")
+        curr_node = self.root
+        for part in p.parts[1:]:
+            curr_node = curr_node.add_child(part)
 
 
 def _get_copy_info(
@@ -38,7 +67,7 @@ def _get_copy_info(
     return src_location, src_path, dst_location, dst_path
 
 
-def get_metadata_from_log(filepath: str):
+def translate_log(filepath: str):
     workflow_start, workflow_end, workflow_name = (None for _ in range(3))
     deployments = []
     file_copies = {}
@@ -49,6 +78,7 @@ def get_metadata_from_log(filepath: str):
     job_inputs_interval = {}
     job_input_reading = False
     job_input_name = None
+    filesystems = {}
     with open(filepath) as fd:
         for line in fd:
             words = [w.strip() for w in line.split(" ") if w]
@@ -65,10 +95,13 @@ def get_metadata_from_log(filepath: str):
                 workflow_start = str_to_datetime(" ".join(words[:2]))
             elif "DEPLOYING" in words:
                 deployments.append(words[-1])
+                filesystems[words[-1]] = FileSystem(words[-1])
             elif len(words) > 3 and "COMPLETED" == words[3] and "copy" == words[4]:
                 src_location, src_path, dst_location, dst_path = _get_copy_info(
                     words, transfer_completed=True
                 )
+                filesystems[src_location].add_child(src_path)
+                filesystems[dst_location].add_child(dst_path)
                 copy_info = file_copies[dst_path]
                 copy_info.end_time = str_to_datetime(" ".join(words[:2]))
                 if (
@@ -164,8 +197,8 @@ def get_metadata_from_log(filepath: str):
             f"transfer: {copy_info.end_time - copy_info.start_time}\n"
         )
         print("#" * 20)
-    return (
+    workflow = Workflow(workflow_start, workflow_end)
+    workflow.steps.extend(
         sorted(steps.values(), key=lambda x: x.get_start()),
-        workflow_start,
-        workflow_end,
     )
+    return workflow

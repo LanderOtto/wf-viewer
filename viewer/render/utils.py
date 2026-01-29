@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import sys
 from collections.abc import MutableSequence
+from datetime import timedelta
+
+
+def format_seconds(td: timedelta | None) -> str:
+    """Helper to format timedelta safely."""
+    return f"{td.total_seconds():.4f}" if td is not None else "N/A"
 
 
 def multi_print(
