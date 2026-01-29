@@ -1,3 +1,5 @@
-plotly
-pandas
-matplotlib
+matplotlib==3.10.8
+pandas==3.0.0
+pydantic==2.12.5
+plotly==6.5.2
+ruamel-yaml==0.18.17

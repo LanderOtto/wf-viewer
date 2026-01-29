@@ -28,6 +28,8 @@ packages = [
     "viewer.render",
     "viewer.translator",
     "viewer.translator.streamflow",
+    "viewer.translator.cwltool",
+    "viewer.translator.toil",
 ]
 
 [tool.setuptools.dynamic]

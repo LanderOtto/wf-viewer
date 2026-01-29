@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping, MutableSequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 
 
@@ -82,7 +82,10 @@ class TransferData(Action):
         self.dst_location: str = dst_location
 
 
-class Workflow(Action):
-    def __init__(self, start: timedelta, end: timedelta | None) -> None:
-        super().__init__(start, end)
+class Workflow:
+    def __init__(self, start_date: datetime, end_date: datetime) -> None:
+        self.start_date: datetime = start_date
+        self.end_date: datetime = end_date
+        self.start_time: timedelta = start_date - start_date
+        self.end_time: timedelta = end_date - start_date
         self.steps: MutableSequence[Step] = []
