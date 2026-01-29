@@ -7,6 +7,7 @@ import plotly.io as pio
 
 from viewer.cli.schema import GroupingMode, OutputConfig, StyleConfig
 from viewer.core.entity import Workflow
+from viewer.render.utils import save_file_log
 
 
 def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.DataFrame:
@@ -129,7 +130,7 @@ def create_report(
         fig.update_yaxes(visible=False)
         filepath = out_config.get_filepath("html")
         pio.write_html(fig, filepath)
-        print(f"Created file {filepath}")
+        save_file_log(filepath, "report")
 
     if extensions := [e for e in out_config.extension if e != "html"]:
         _mathplotlib_rendering(df, style_config)
@@ -137,5 +138,5 @@ def create_report(
             filepath = out_config.get_filepath(ext)
             plt.tight_layout()
             plt.savefig(filepath)
-            print(f"Created file {filepath}")
+            save_file_log(filepath, "report")
         plt.close()

@@ -55,3 +55,6 @@ class OutputConfig:
         if not filename.endswith(f".{extension}"):
             filename = f"{self.filename}.{extension}"
         return os.path.join(self.outdir, filename)
+
+    def get_statspath(self) -> str:
+        return os.path.join(self.outdir, f"{self.filename}.stats.json")

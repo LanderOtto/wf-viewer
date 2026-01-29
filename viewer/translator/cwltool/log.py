@@ -48,7 +48,7 @@ class CWLStep:
         self.parent: str | None = parent
 
 
-def scraping_log(input_paths: MutableSequence[str]):
+def translate_log(input_paths: MutableSequence[str]):
     steps = []
     workflow_start_date = None
     workflow_end_date = None

@@ -64,13 +64,15 @@ def get_parser():
         type=str,
         help="Report format: (default: html)",
     )
-
     output_group.add_argument("-o", "--outdir", default=os.getcwd())
 
     # --- Group: Statistics ---
     stats_group = parser.add_argument_group("Statistics & Logging")
-    stats_group.add_argument("--stats", action="store_true")
-    stats_group.add_argument("--json-stats", action="store_true")
-    stats_group.add_argument("--quiet", action="store_true")
+    stats_group.add_argument(
+        "--show-stats", action="store_true", help="Show statistics on stdout"
+    )
+    stats_group.add_argument(
+        "--save-stats", action="store_true", help="Save statistics in a JSON file"
+    )
 
     return parser

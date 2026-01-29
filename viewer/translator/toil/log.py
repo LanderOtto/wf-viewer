@@ -68,7 +68,7 @@ def bottom_up(elem: str, dictionary: MutableMapping[str, MutableSequence[str]]) 
     return result
 
 
-def analysis(input_path: str):
+def translate_log(input_path: str):
     workflow_start = None
     workflow_end = None
     toil_jobs = {}
