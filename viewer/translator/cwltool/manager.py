@@ -1,4 +1,4 @@
-from typing import MutableSequence
+from collections.abc import MutableSequence
 
 from viewer.core.entity import Workflow
 from viewer.core.utils import get_path

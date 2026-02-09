@@ -24,6 +24,7 @@ wf-viewer = "viewer.main:run"
 [tool.setuptools]
 packages = [
     "viewer",
+    "viewer.cli",
     "viewer.core",
     "viewer.render",
     "viewer.translator",
