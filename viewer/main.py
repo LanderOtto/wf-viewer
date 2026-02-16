@@ -33,6 +33,9 @@ def _main(args) -> int:
         case _:
             raise NotImplementedError(args.workflow_manager)
 
+    if workflow.empty():
+        raise Exception("The workflow is empty")
+
     create_stats(workflow, out_config, args.show_stats, args.save_stats)
     create_report(workflow, out_config, style_config)
     return 0

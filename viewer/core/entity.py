@@ -110,3 +110,6 @@ class Workflow:
         self.start_time: timedelta = start_date - start_date
         self.end_time: timedelta = end_date - start_date
         self.steps: MutableSequence[Step] = []
+
+    def empty(self) -> bool:
+        return len(self.steps) == 0

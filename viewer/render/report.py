@@ -11,15 +11,6 @@ from viewer.core.entity import Workflow
 from viewer.render.utils import save_file_log
 
 
-def format_energy(joules: float) -> str:
-    if joules == 0:
-        return "0.0 Wh"
-    wh = joules / 3600
-    if wh >= 1000:
-        return f"{wh / 1000:.2f} kWh"
-    return f"{wh:.2f} Wh"
-
-
 def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.DataFrame:
     data = []
     match grouping_mode:
@@ -59,7 +50,87 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
     return pd.DataFrame(data)
 
 
-def _mathplotlib_rendering(df: pd.DataFrame, style: StyleConfig) -> None:
+def _format_energy(joules: float | None) -> str:
+    if joules is None:
+        return "NaN Wh"
+    elif joules == 0:
+        return "0.0 Wh"
+    wh = joules / 3600
+    if wh >= 1000:
+        return f"{wh / 1000:.2f} kWh"
+    return f"{wh:.2f} Wh"
+
+
+def _rendering_energy(df: pd.DataFrame, style: StyleConfig) -> None:
+    fig, ax = plt.subplots(figsize=(12, 7))
+    start_ts = df["Start"].min()
+
+    is_aggregate = style.grouping_mode == GroupingMode.AGGREGATE
+    color_key = "Locations" if is_aggregate else "Location"
+
+    unique_locs = df[color_key].unique()
+    colors = plt.colormaps[style.color_palette]
+    loc_color_map = {
+        loc: colors(i / max(1, len(unique_locs) - 1))
+        for i, loc in enumerate(unique_locs)
+    }
+
+    for _, row in df.iterrows():
+        duration = (row["Finish"] - row["Start"]).total_seconds()
+        offset = (row["Start"] - start_ts).total_seconds()
+
+        label_y = row["Step"] if is_aggregate else row["Task"]
+        ax.barh(
+            label_y,
+            duration,
+            left=offset,
+            height=0.6,
+            color=loc_color_map[row[color_key]],
+            edgecolor="black",
+            alpha=0.8,
+        )
+        energy_label = _format_energy(row["Energy"])
+        if is_aggregate:
+            label_text = f"{energy_label} ({row['NTasks']}T)"
+        else:
+            label_text = energy_label
+        text_x = offset + (duration / 2)
+        txt = ax.text(
+            text_x,
+            label_y,
+            label_text,
+            ha="center",
+            va="center",
+            fontsize=10,
+            fontweight="bold",
+            color="white",
+        )
+        txt.set_path_effects([path_effects.withStroke(linewidth=2, foreground="black")])
+
+    # Styling
+    ax.set_xlabel("Time (seconds)", fontsize=14)
+    ax.set_title("Workflow Timeline", fontsize=16)
+
+    if style.xlim:
+        ax.set_xlim(0, style.xlim)
+    ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+
+    # Legend
+    if style.legend:
+        handles = [
+            plt.Rectangle((0, 0), 1, 1, color=loc_color_map[loc]) for loc in unique_locs
+        ]
+        ax.legend(
+            handles,
+            unique_locs,
+            title="Locations",
+            bbox_to_anchor=(1.05, 1),
+            loc="upper left",
+        )
+    plt.tight_layout()
+
+
+def _rendering_time(df: pd.DataFrame, style: StyleConfig) -> None:
     fig, ax = plt.subplots(figsize=(10, 6))
     start_ts = df["Start"].min()
     step_names = df["Step"].unique()
@@ -126,77 +197,6 @@ def _mathplotlib_rendering(df: pd.DataFrame, style: StyleConfig) -> None:
         )
 
 
-def _rendering_energy(df: pd.DataFrame, style: StyleConfig) -> None:
-    fig, ax = plt.subplots(figsize=(12, 7))
-    start_ts = df["Start"].min()
-
-    is_aggregate = style.grouping_mode == GroupingMode.AGGREGATE
-    color_key = "Locations" if is_aggregate else "Location"
-
-    unique_locs = df[color_key].unique()
-    colors = plt.colormaps[style.color_palette]
-    loc_color_map = {
-        loc: colors(i / max(1, len(unique_locs) - 1))
-        for i, loc in enumerate(unique_locs)
-    }
-
-    for _, row in df.iterrows():
-        duration = (row["Finish"] - row["Start"]).total_seconds()
-        offset = (row["Start"] - start_ts).total_seconds()
-
-        label_y = row["Step"] if is_aggregate else row["Task"]
-        ax.barh(
-            label_y,
-            duration,
-            left=offset,
-            height=0.6,
-            color=loc_color_map[row[color_key]],
-            edgecolor="black",
-            alpha=0.8,
-        )
-
-        energy_label = format_energy(row["Energy"])
-        if is_aggregate:
-            label_text = f"{energy_label} ({row['NTasks']}T)"
-        else:
-            label_text = energy_label
-
-        text_x = offset + (duration / 2)
-        txt = ax.text(
-            text_x,
-            label_y,
-            label_text,
-            ha="center",
-            va="center",
-            fontsize=10,
-            fontweight="bold",
-            color="white",
-        )
-        txt.set_path_effects([path_effects.withStroke(linewidth=2, foreground="black")])
-
-    # Styling
-    ax.set_xlabel("Time (seconds)", fontsize=14)
-    ax.set_title("Workflow Timeline", fontsize=16)
-
-    if style.xlim:
-        ax.set_xlim(0, style.xlim)
-    ax.grid(True, axis="x", linestyle="--", alpha=0.3)
-
-    # Legend
-    if style.legend:
-        handles = [
-            plt.Rectangle((0, 0), 1, 1, color=loc_color_map[loc]) for loc in unique_locs
-        ]
-        ax.legend(
-            handles,
-            unique_locs,
-            title="Locations",
-            bbox_to_anchor=(1.05, 1),
-            loc="upper left",
-        )
-    plt.tight_layout()
-
-
 def create_report(
     workflow: Workflow, out_config: OutputConfig, style_config: StyleConfig
 ) -> None:
@@ -220,7 +220,7 @@ def create_report(
         save_file_log(filepath, "report")
 
     if extensions := [e for e in out_config.extension if e != "html"]:
-        _mathplotlib_rendering(df, style_config)
+        _rendering_time(df, style_config)
         for ext in extensions:
             filepath = out_config.get_filepath(ext)
             plt.tight_layout()
