@@ -26,6 +26,9 @@ def get_parser():
         choices=["streamflow", "cwltool", "cwltoil"],
         required=True,
     )
+    input_group.add_argument(
+        "-c", "--clusters-info", type=str, default=None, help="Path to cluster info"
+    )
 
     # --- Group: Styling ---
     style_group = parser.add_argument_group("Style")

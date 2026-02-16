@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import MutableMapping, MutableSequence
 from datetime import datetime, timedelta
 from enum import Enum
@@ -37,6 +38,9 @@ class Step:
         else:
             return None
 
+    def get_energy(self) -> float:
+        return sum(task.energy for task in self.instances)
+
     def get_duration(self) -> timedelta | None:
         return (
             (self.get_end() - self.get_start()) if self.get_end() is not None else None
@@ -45,24 +49,41 @@ class Step:
     def __str__(self):
         return f"{self.name}. Start: {self.get_start()}. End: {self.get_end()}"
 
+    def get_locations(self) -> MutableSequence[str]:
+        return list({task.get_location() for task in self.instances})
+
 
 class Task(Action):
     def __init__(
         self,
         start: timedelta,
         end: timedelta | None,
-        location: str | None = None,
+        deployment: str | None = None,
+        service: str | None = None,
         name: str | None = None,
     ) -> None:
         super().__init__(start, end)
         self.name = name
-        self.location = location
+        self.deployment = deployment
+        self.service = service
         self.queue_times: MutableSequence[Action] = []
+        self.energy: float = 0.0
         self.status: TaskStatus = TaskStatus.COMPLETED
         self.transfer_inputs: MutableMapping[str, TransferData]
 
+    def get_energy(self) -> float:
+        return self.energy
+
+    def get_location(self) -> str:
+        a = (
+            os.path.join(self.deployment, self.service)
+            if self.service
+            else self.deployment
+        )
+        return a
+
     def __str__(self) -> str:
-        return f"{self.name} {self.start_time} {self.end_time} {self.location}"
+        return f"{self.name} {self.start_time} {self.end_time} {self.get_location()}"
 
 
 class TransferData(Action):

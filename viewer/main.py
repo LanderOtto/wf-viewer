@@ -3,7 +3,11 @@
 import sys
 
 from viewer.cli.arguments import get_parser
-from viewer.cli.priority import create_output_config, create_style_config
+from viewer.cli.priority import (
+    create_cluster_info,
+    create_output_config,
+    create_style_config,
+)
 from viewer.render.report import create_report
 from viewer.render.stats import create_stats
 from viewer.translator.cwltool.manager import cwltool_create_workflow
@@ -14,11 +18,14 @@ from viewer.translator.toil.manager import toil_create_workflow
 def _main(args) -> int:
     style_config = create_style_config(args)
     out_config = create_output_config(args)
+    locations_metadata = create_cluster_info(args)
 
     workflow = None
     match args.workflow_manager:
         case "streamflow":
-            workflow = sf_create_workflow(args.input_type, args.inputs)
+            workflow = sf_create_workflow(
+                args.input_type, args.inputs, locations_metadata
+            )
         case "cwltool":
             workflow = cwltool_create_workflow(args.input_type, args.inputs)
         case "cwltoil":
@@ -37,9 +44,8 @@ def run() -> int:
         sys.exit(_main(parser.parse_args()))
     except KeyboardInterrupt:
         sys.exit(130)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    except Exception:
+        raise
 
 
 if __name__ == "__main__":

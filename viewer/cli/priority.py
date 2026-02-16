@@ -1,12 +1,50 @@
 import argparse
+import json
 import os
 from collections.abc import MutableMapping
+from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
 
 from viewer.cli.schema import OutputConfig, StyleConfig
 from viewer.core.utils import get_path
+
+
+def create_cluster_info(args: argparse.Namespace) -> MutableMapping[str, Any]:
+    clusters = {}
+    if args.clusters_info:
+        cluster_path = Path(args.clusters_info).resolve()
+        with open(cluster_path) as f:
+            yaml_data = YAML().load(f)
+        for loc_name, path in yaml_data.items():
+            if Path(path).is_absolute():
+                abs_path = Path(path).resolve()
+            else:
+                abs_path = cluster_path.parent / path
+            with open(abs_path) as f:
+                # Assumption: supported only SLURM and
+                # the files are all produced executing `sacct --json --jobs [JOB_ID]`
+                for job in json.load(f)["jobs"]:
+                    energy = None
+                    for resource in job["tres"]["allocated"]:
+                        if resource["type"] == "energy":
+                            energy = resource["count"]
+                    clusters.setdefault(loc_name, {})
+                    clusters[loc_name][job["job_id"]] = {
+                        "queue_starttime": job["time"]["submission"],
+                        "queue_endtime": job["time"]["start"],
+                        "avg_energy": energy,  # Joule
+                    }
+    return clusters
+
+
+def create_output_config(args: argparse.Namespace) -> OutputConfig:
+    return OutputConfig(
+        outdir=get_path(args.outdir),
+        filename=args.filename,
+        extension=args.format,
+    )
 
 
 def create_style_config(args: argparse.Namespace) -> StyleConfig:
@@ -35,11 +73,3 @@ def create_style_config(args: argparse.Namespace) -> StyleConfig:
                 current_map[key.strip()] = val.strip()
         config_data["color_map"] = current_map
     return StyleConfig.model_validate(config_data)
-
-
-def create_output_config(args: argparse.Namespace) -> OutputConfig:
-    return OutputConfig(
-        outdir=get_path(args.outdir),
-        filename=args.filename,
-        extension=args.format,
-    )
