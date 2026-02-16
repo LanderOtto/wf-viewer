@@ -5,8 +5,9 @@ import posixpath
 import re
 from collections.abc import MutableMapping, MutableSequence
 from pathlib import PurePath
+from typing import Any
 
-from viewer.core.entity import Step, Task, TransferData, Workflow
+from viewer.core.entity import Action, Step, Task, Workflow
 from viewer.core.utils import str_to_datetime
 
 
@@ -64,21 +65,27 @@ def _get_copy_info(
         dst_path = words[9 + offset]
         src_location = words[7 + offset]
         dst_location = words[12 + offset]
-    return src_location, src_path, dst_location, dst_path
+    return (
+        src_location.split(os.sep)[0],
+        src_path,
+        dst_location.split(os.sep)[0],
+        dst_path,
+    )
 
 
-def translate_log(filepath: str):
+def translate_log(
+    filepath: str, location_metadata: MutableMapping[str, Any]
+) -> Workflow:
     workflow_start, workflow_end, workflow_name = (None for _ in range(3))
     deployments = []
-    file_copies = {}
+    # file_copies = {}
     steps = {}
     last_timestamp = None
-    queue_manager_ids = {}
-    queue_locations = {}
+    unknown_jobs_info = {}
     job_inputs_interval = {}
     job_input_reading = False
     job_input_name = None
-    filesystems = {}
+    filesystems = {"local": FileSystem("local")}
     with open(filepath) as fd:
         for line in fd:
             words = [w.strip() for w in line.split(" ") if w]
@@ -87,66 +94,105 @@ def translate_log(filepath: str):
                 if sentence == "}":
                     job_input_reading = False
                 job_inputs_interval[job_input_name] += sentence
-            elif re.match(r".*Job .* inputs: ", sentence):
-                job_input_name = words[4]
+            elif match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+DEBUG\s+Job\s+(?P<job_name>\S+)\s+inputs:\s+\{$",
+                sentence,
+            ):
+                job_input_name = match.group("job_name")
                 job_inputs_interval[job_input_name] = "{"
                 job_input_reading = True
-            if workflow_start is None and "Processing" in words and "workflow" in words:
-                workflow_start = str_to_datetime(" ".join(words[:2]))
-            elif "DEPLOYING" in words:
-                deployments.append(words[-1])
-                filesystems[words[-1]] = FileSystem(words[-1])
-            elif len(words) > 3 and "COMPLETED" == words[3] and "copy" == words[4]:
-                src_location, src_path, dst_location, dst_path = _get_copy_info(
-                    words, transfer_completed=True
-                )
-                filesystems[src_location].add_child(src_path)
-                filesystems[dst_location].add_child(dst_path)
-                copy_info = file_copies[dst_path]
-                copy_info.end_time = str_to_datetime(" ".join(words[:2]))
-                if (
-                    src_path != copy_info.src_path
-                    or dst_path != copy_info.dst_path
-                    or src_location != copy_info.src_location
-                    or dst_location != copy_info.dst_location
-                ):
-                    raise Exception("Error copy scraping start and end times")
-            elif len(words) > 3 and "COPYING" in words[3]:
-                src_location, src_path, dst_location, dst_path = _get_copy_info(words)
-                file_copies[dst_path] = TransferData(
-                    src_path=src_path,
-                    dst_path=dst_path,
-                    src_location=src_location,
-                    dst_location=dst_location,
-                    start=str_to_datetime(" ".join(words[:2])),
-                )
-            elif "EXECUTING step" in sentence:
-                step = steps.setdefault(words[5], Step(words[5], []))
+            if match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+Processing\s+workflow\s+(?P<workflow_id>[\w-]+)$",
+                sentence,
+            ):
+                if workflow_start is not None:
+                    raise Exception("There are multiple workflows in the log")
+                workflow_start = str_to_datetime(match.group("timestamp"))
+            elif match := re.search(
+                r"^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+INFO\s+DEPLOYING\s+(?P<deployment>\S+)$",
+                sentence,
+            ):
+                deployment = match.group("deployment")
+                deployments.append(deployment)
+                filesystems[deployment] = FileSystem(deployment)
+            # elif len(words) > 3 and "COMPLETED" == words[3] and "copy" == words[4]:
+            #     src_location, src_path, dst_location, dst_path = _get_copy_info(
+            #         words, transfer_completed=True
+            #     )
+            #     filesystems[src_location].add(src_path)
+            #     filesystems[dst_location].add(dst_path)
+            #     copy_info = file_copies[dst_path]
+            #     copy_info.end_time = str_to_datetime(" ".join(words[:2]))
+            #     if (
+            #         src_path != copy_info.src_path
+            #         or dst_path != copy_info.dst_path
+            #         or src_location != copy_info.src_location
+            #         or dst_location != copy_info.dst_location
+            #     ):
+            #         raise Exception("Error copy scraping start and end times")
+            # elif len(words) > 3 and "COPYING" in words[3]:
+            #     src_location, src_path, dst_location, dst_path = _get_copy_info(words)
+            #     file_copies[dst_path] = TransferData(
+            #         src_path=src_path,
+            #         dst_path=dst_path,
+            #         src_location=src_location,
+            #         dst_location=dst_location,
+            #         start=str_to_datetime(" ".join(words[:2])),
+            #     )
+            elif match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+EXECUTING\s+step\s+(?P<step_name>\S+)\s+\(job\s+(?P<job_name>\S+)\)\s+(?:on\s+location\s+)?(?P<execution_type>\S+)\s+into\s+directory\s+(?P<directory>.*?):?$",
+                sentence,
+            ):
+                step_name = match.group("step_name")
+                step = steps.setdefault(step_name, Step(step_name, []))
+                if (location := match.group("execution_type")) == "locally":
+                    deployment = "local"
+                    service = None
+                else:
+                    loc_components = location.split(os.sep)
+                    deployment = loc_components[0]
+                    if len(loc_components) > 2:
+                        if len(loc_components) > 3:
+                            print(
+                                f"WARNING: Location {location} wraps another deployment"
+                            )
+                        service = loc_components[1]
+                    else:
+                        service = None
                 step.instances.append(
                     Task(
-                        start=str_to_datetime(" ".join(words[:2])) - workflow_start,
+                        start=str_to_datetime(match.group("timestamp"))
+                        - workflow_start,
                         end=None,
-                        location=words[10],
-                        name=words[7][:-1],
+                        deployment=deployment,
+                        service=service,
+                        name=match.group("job_name"),
                     )
                 )
-            elif re.match(r".*Job .* changed status to COMPLETED", sentence):
-                if os.path.dirname(words[4]) in steps.keys():
-                    for instance in steps[os.path.dirname(words[4])].instances:
-                        if instance.name == words[4]:
-                            end_time = str_to_datetime(" ".join(words[:2]))
+            elif match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+DEBUG\s+Job\s+(?P<job_name>\S+)\s+changed\s+status\s+to\s+(?P<status>\S+)$",
+                sentence,
+            ):
+                job_name = match.group("job_name")
+                if os.path.dirname(job_name) in steps.keys():
+                    for instance in steps[os.path.dirname(job_name)].instances:
+                        if instance.name == job_name:
+                            end_time = str_to_datetime(match.group("timestamp"))
                             instance.end_time = end_time - workflow_start
                             if workflow_end is None or workflow_end < end_time:
                                 workflow_end = end_time
                             break
-            elif re.match(r".*COMPLETED Step.*", sentence):
-                step = steps.get(words[-1], None)
-                missing_log = False
+            elif match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+COMPLETED\s+Step\s+(?P<step_name>\S+)$",
+                sentence,
+            ):
+                step = steps.get(match.group("step_name"), None)
+                missing_log = True
                 for instance in step.instances if step is not None else []:
                     if instance.end_time is None:
-                        missing_log = True
+                        missing_log = False
                         instance.end_time = (
-                            str_to_datetime(" ".join(words[:2])) - workflow_start
+                            str_to_datetime(match.group("timestamp")) - workflow_start
                         )
                 if missing_log:
                     print(
@@ -154,22 +200,32 @@ def translate_log(filepath: str):
                         "A parsing error likely occurred. "
                         "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
                     )
-            elif re.match(r".*Scheduled job .* with job id .*", sentence):
-                if os.path.dirname(words[5]) in steps.keys():
-                    for instance in steps[os.path.dirname(words[5])].instances:
-                        if instance.name == words[5]:
-                            if instance.location in queue_locations.keys():
-                                queue_start = queue_locations[instance.location][
-                                    words[9]
+            elif match := re.search(
+                r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+INFO\s+Scheduled job (?P<streamflow_job>[\w\-/]+) with job id (?P<slurm_job>\d+)",
+                sentence,
+            ):
+                streamflow_job = match.group("streamflow_job")
+                if (step_name := os.path.dirname(streamflow_job)) in steps.keys():
+                    for instance in steps[step_name].instances:
+                        if instance.name == streamflow_job:
+                            slurm_job = int(match.group("slurm_job"))
+                            if instance.deployment in location_metadata.keys():
+                                queue_start = location_metadata[instance.deployment][
+                                    slurm_job
                                 ]["queue_starttime"]
-                                queue_end = queue_locations[instance.location][
-                                    words[9]
+                                queue_end = location_metadata[instance.deployment][
+                                    slurm_job
                                 ]["queue_endtime"]
-                                instance.queue_times.append((queue_start, queue_end))
+                                instance.queue_times.append(
+                                    Action(queue_start, queue_end)
+                                )
+                                instance.energy = location_metadata[
+                                    instance.deployment
+                                ][slurm_job]["avg_energy"]
                             else:
-                                queue_manager_ids.setdefault(
-                                    instance.location, []
-                                ).append(words[9])
+                                unknown_jobs_info.setdefault(
+                                    instance.deployment, []
+                                ).append(str(slurm_job))
             try:
                 if (tmp_timestamp := str_to_datetime(" ".join(words[:2]))) is not None:
                     last_timestamp = tmp_timestamp
@@ -179,24 +235,40 @@ def translate_log(filepath: str):
         print(
             "WARNING: the workflow end time is missing. "
             "A parsing error likely occurred. "
-            "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
+            "(Note: StreamFlow log in debug mode is required to retrieve all necessary information)."
         )
         workflow_end = last_timestamp
         error_end = workflow_end - workflow_start
+        missing_terminations = True
         for step in steps.values():
             for instance in step.instances:
                 if instance.end_time is None:
+                    missing_terminations = False
                     instance.end_time = error_end
+        if missing_terminations:
+            print(
+                "WARNING: Some task end times are missing. The step's end time has been set, but it is inaccurate. "
+                "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
+            )
 
-    for copy_info in file_copies.values():
+    if unknown_jobs_info:
         print(
-            f"src_path: {copy_info.src_path}\n"
-            f"src_loc: {copy_info.src_location}\n"
-            f"dst_path: {copy_info.dst_path}\n"
-            f"dst_loc: {copy_info.dst_location}\n"
-            f"transfer: {copy_info.end_time - copy_info.start_time}\n"
+            "WARNING: Missing jobs info in some locations execute the following command in the locations"
         )
-        print("#" * 20)
+        for loc, jobs in unknown_jobs_info.items():
+            print(
+                f"Location {loc}: `sacct --json --jobs {','.join(jobs)} > {loc}_info.json`"
+            )
+
+    # for copy_info in file_copies.values():
+    #     print(
+    #         f"src_path: {copy_info.src_path}\n"
+    #         f"src_loc: {copy_info.src_location}\n"
+    #         f"dst_path: {copy_info.dst_path}\n"
+    #         f"dst_loc: {copy_info.dst_location}\n"
+    #         f"transfer: {copy_info.end_time - copy_info.start_time}\n"
+    #     )
+    #     print("#" * 20)
     workflow = Workflow(workflow_start, workflow_end)
     workflow.steps.extend(
         sorted(steps.values(), key=lambda x: x.get_start()),
