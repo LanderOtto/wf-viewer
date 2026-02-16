@@ -11,7 +11,7 @@ from viewer.render.utils import save_file_log
 
 def get_step_metrics(step: Step) -> MutableMapping[str, Any]:
     """Calculates all metrics for a step and returns them as a dictionary."""
-    durations = [inst.get_duration() for inst in step.instances if inst.get_duration()]
+    durations = [task.get_duration() for task in step.instances if task.get_duration()]
     duration_total = step.get_duration()
 
     metrics = {

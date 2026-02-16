@@ -50,10 +50,10 @@ class OutputConfig:
         self.filename: str = filename
         self.extension: MutableSequence[str] = extension
 
-    def get_filepath(self, extension: str) -> str:
+    def get_filepath(self, extension: str, prefix: str = "", postfix: str = "") -> str:
         filename = self.filename
         if not filename.endswith(f".{extension}"):
-            filename = f"{self.filename}.{extension}"
+            filename = f"{prefix}{self.filename}{postfix}.{extension}"
         return os.path.join(self.outdir, filename)
 
     def get_statspath(self) -> str:
