@@ -16,6 +16,7 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
     match grouping_mode:
         case GroupingMode.AGGREGATE:
             for step in workflow.steps:
+                locs = step.get_locations()
                 data.append(
                     {
                         "Step": step.name,
@@ -24,7 +25,7 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
                         "NTasks": len(step.instances),
                         "Energy": step.get_energy(),
                         "Duration": step.get_duration(),
-                        "Locations": ",".join(step.get_locations()),
+                        "Locations": ",".join(locs) if locs else None,
                     }
                 )
         case GroupingMode.STEP | GroupingMode.TASK:
@@ -55,10 +56,27 @@ def _format_energy(joules: float | None) -> str:
         return "NaN Wh"
     elif joules == 0:
         return "0.0 Wh"
-    wh = joules / 3600
-    if wh >= 1000:
-        return f"{wh / 1000:.2f} kWh"
-    return f"{wh:.2f} Wh"
+    elif joules < 0:
+        raise ValueError("Energy value cannot be negative")
+
+    # 1 Wh = 3600 J
+    watt_hours = joules / 3600
+
+    units = [
+        ("GWh", 1e9),
+        ("MWh", 1e6),
+        ("kWh", 1e3),
+        ("Wh", 1),
+        ("mWh", 1e-3),
+    ]
+
+    for unit_name, factor in units:
+        value = watt_hours / factor
+        if value >= 1:
+            return f"{value:.3f} {unit_name}"
+
+    # If extremely small (less than 1 mWh)
+    return f"{watt_hours / 1e-3:.3f} mWh"
 
 
 def _rendering_energy(df: pd.DataFrame, style: StyleConfig) -> None:
@@ -228,14 +246,17 @@ def create_report(
             save_file_log(filepath, "report")
         plt.close()
 
-    if extensions := [e for e in out_config.extension]:
-        _rendering_energy(df, style_config)
-        for ext in extensions:
-            if ext == "html":
-                print("WARNING: Format HTML does not available for energy plot")
-                continue
-            filepath = out_config.get_filepath(ext, postfix=".energy")
-            plt.tight_layout()
-            plt.savefig(filepath)
-            save_file_log(filepath, "report")
-        plt.close()
+    if any(row["Energy"] is not None for _, row in df.iterrows()):
+        if extensions := [e for e in out_config.extension]:
+            _rendering_energy(df, style_config)
+            for ext in extensions:
+                if ext == "html":
+                    print("WARNING: Format HTML does not available for energy plot")
+                    continue
+                filepath = out_config.get_filepath(ext, postfix=".energy")
+                plt.tight_layout()
+                plt.savefig(filepath)
+                save_file_log(filepath, "report")
+            plt.close()
+    else:
+        print("WARNING: Workflow steps do not have energy information")

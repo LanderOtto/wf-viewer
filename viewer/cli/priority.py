@@ -30,11 +30,15 @@ def create_cluster_info(args: argparse.Namespace) -> MutableMapping[str, Any]:
                     for resource in job["tres"]["allocated"]:
                         if resource["type"] == "energy":
                             energy = resource["count"]
+                    if energy is None:
+                        print("Job", job["job_id"], "has no energy report")
+                    elif float(energy) < 0:
+                        raise Exception(f"Job {job['job_id']} has negative energy")
                     clusters.setdefault(loc_name, {})
                     clusters[loc_name][job["job_id"]] = {
                         "queue_starttime": job["time"]["submission"],
                         "queue_endtime": job["time"]["start"],
-                        "avg_energy": energy,  # Joule
+                        "avg_energy": float(energy) if energy else None,  # Joule
                     }
     return clusters
 

@@ -38,8 +38,14 @@ class Step:
         else:
             return None
 
-    def get_energy(self) -> float:
-        return sum(task.energy for task in self.instances)
+    def get_energy(self) -> float | None:
+        if len(
+            energy_tasks := [
+                task.energy for task in self.instances if task.energy is not None
+            ]
+        ) > 0 and len(self.instances) != len(energy_tasks):
+            print(f"WARNING: Step {self.name} has some tasks with no energy report")
+        return sum(energy_tasks) if len(energy_tasks) else None
 
     def get_duration(self) -> timedelta | None:
         return (
@@ -50,7 +56,9 @@ class Step:
         return f"{self.name}. Start: {self.get_start()}. End: {self.get_end()}"
 
     def get_locations(self) -> MutableSequence[str]:
-        return list({task.get_location() for task in self.instances})
+        return list(
+            {loc for task in self.instances if (loc := task.get_location()) is not None}
+        )
 
 
 class Task(Action):
@@ -63,24 +71,23 @@ class Task(Action):
         name: str | None = None,
     ) -> None:
         super().__init__(start, end)
-        self.name = name
-        self.deployment = deployment
-        self.service = service
+        self.name: str = name
+        self.deployment: str | None = deployment
+        self.service: str | None = service
         self.queue_times: MutableSequence[Action] = []
-        self.energy: float = 0.0
+        self.energy: float | None = None
         self.status: TaskStatus = TaskStatus.COMPLETED
         self.transfer_inputs: MutableMapping[str, TransferData]
 
     def get_energy(self) -> float:
         return self.energy
 
-    def get_location(self) -> str:
-        a = (
+    def get_location(self) -> str | None:
+        return (
             os.path.join(self.deployment, self.service)
             if self.service
             else self.deployment
         )
-        return a
 
     def __str__(self) -> str:
         return f"{self.name} {self.start_time} {self.end_time} {self.get_location()}"
