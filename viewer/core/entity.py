@@ -89,6 +89,13 @@ class Task(Action):
             else self.deployment
         )
 
+    def get_queue_time(self) -> timedelta | None:
+        return (
+            sum(q.end_time - q.start_time for q in self.queue_times)
+            if self.queue_times
+            else None
+        )
+
     def __str__(self) -> str:
         return f"{self.name} {self.start_time} {self.end_time} {self.get_location()}"
 

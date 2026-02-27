@@ -38,6 +38,18 @@ def get_parser():
         action="append",
         help="Format: StepName:Color (can be used multiple times)",
     )
+    style_group.add_argument(
+        "-e",
+        "--excluded-steps",
+        action="append",
+        help="List of step names to exclude",
+    )
+    style_group.add_argument(
+        "-r",
+        "--renaming-steps",
+        action="append",
+        help="Map to rename steps CurrentName:NewName",
+    )
     style_group.add_argument("-p", "--color-palette", type=str)
     style_group.add_argument(
         "-g",

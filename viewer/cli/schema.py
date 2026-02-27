@@ -18,6 +18,10 @@ class GroupingMode(str, Enum):
 class StyleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    excluded_steps: MutableSequence[str] = Field(default=[], alias="excluded-steps")
+    renaming_steps: MutableMapping[str, str] = Field(
+        default_factory=dict, alias="renaming-steps"
+    )
     legend: bool = True
     color_palette: str = Field(default="tab20", alias="color-palette")
     color_map: MutableMapping[str, str] = Field(default_factory=dict, alias="color-map")

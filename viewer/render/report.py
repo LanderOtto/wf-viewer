@@ -40,6 +40,7 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
                             "Step": step.name,
                             "Start": workflow.start_date + job.start_time,
                             "Finish": workflow.start_date + job.end_time,
+                            "QueueTime": job.get_queue_time(),
                             "Task": f"{step.name}_{j}",
                             "Energy": job.get_energy(),
                             "Duration": job.get_duration(),
@@ -94,6 +95,10 @@ def _rendering_energy(df: pd.DataFrame, style: StyleConfig) -> None:
     }
 
     for _, row in df.iterrows():
+
+        if row["Step"] in style.excluded_steps:
+            continue
+
         duration = (row["Finish"] - row["Start"]).total_seconds()
         offset = (row["Start"] - start_ts).total_seconds()
 
@@ -151,7 +156,7 @@ def _rendering_energy(df: pd.DataFrame, style: StyleConfig) -> None:
 def _rendering_time(df: pd.DataFrame, style: StyleConfig) -> None:
     fig, ax = plt.subplots(figsize=(10, 6))
     start_ts = df["Start"].min()
-    step_names = df["Step"].unique()
+    step_names = [s for s in df["Step"].unique() if s not in style.excluded_steps]
     colors = plt.colormaps[style.color_palette]
     step_color_map = {
         step: style.color_map.get(step, colors(i)) for i, step in enumerate(step_names)
@@ -159,21 +164,44 @@ def _rendering_time(df: pd.DataFrame, style: StyleConfig) -> None:
 
     # Horizontal bars
     for _, row in df.iterrows():
-        duration = (row["Finish"] - row["Start"]).total_seconds()
-        offset = (row["Start"] - start_ts).total_seconds()
-        label_y = (
-            row["Task"] if style.grouping_mode == GroupingMode.TASK else row["Step"]
-        )
-        ax.barh(
-            label_y,
-            duration,
-            left=offset,
-            height=0.5,
-            color=step_color_map[row["Step"]],
-        )
+
+        if row["Step"] not in step_names:
+            continue
+
+        step_name = style.renaming_steps.get(row["Step"], row["Step"])
+
+        total_duration = (row["Finish"] - row["Start"]).total_seconds()
+        start_offset = (row["Start"] - start_ts).total_seconds()
+        label_y = row["Task"] if style.grouping_mode == GroupingMode.TASK else step_name
+        if row["QueueTime"]:
+            ax.barh(
+                label_y,
+                row["QueueTime"],
+                left=start_offset,
+                height=0.5,
+                color=step_color_map[row["Step"]],
+                hatch="///",  # This creates the diagonal pattern
+                edgecolor="white",  # Helps the pattern stand out
+                alpha=0.7,  # Optional: makes it look slightly different from "active" time
+            )
+            ax.barh(
+                label_y,
+                total_duration - row["QueueTime"],
+                left=start_offset + row["QueueTime"],
+                height=0.5,
+                color=step_color_map[row["Step"]],
+            )
+        else:
+            ax.barh(
+                label_y,
+                total_duration,
+                left=start_offset,
+                height=0.5,
+                color=step_color_map[row["Step"]],
+            )
         if style.grouping_mode == GroupingMode.AGGREGATE:
             ax.text(
-                offset + 1,
+                start_offset + 1,
                 label_y,
                 row["NTasks"],
                 ha="left",
@@ -205,7 +233,7 @@ def _rendering_time(df: pd.DataFrame, style: StyleConfig) -> None:
         ]
         ax.legend(
             handles,
-            step_names,
+            [style.renaming_steps.get(s, s) for s in step_names],
             title="Steps",
             loc="lower right",
             fontsize=18,

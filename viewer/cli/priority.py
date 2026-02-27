@@ -65,6 +65,7 @@ def create_style_config(args: argparse.Namespace) -> StyleConfig:
         "color_palette": args.color_palette,
         "grouping_mode": args.grouping_mode,
         "xlim": args.xlim,
+        "excluded_steps": args.excluded_steps,
     }
     config_data.update({k: v for k, v in cli_overrides.items() if v is not None})
 
@@ -76,4 +77,11 @@ def create_style_config(args: argparse.Namespace) -> StyleConfig:
                 key, val = pair.split(":", 1)
                 current_map[key.strip()] = val.strip()
         config_data["color_map"] = current_map
+    if args.renaming_steps:
+        current_map = config_data.get("renaming_steps", {})
+        for pair in args.renaming_steps:
+            if ":" in pair:
+                key, val = pair.split(":", 1)
+                current_map[key.strip()] = val.strip()
+        config_data["renaming_steps"] = current_map
     return StyleConfig.model_validate(config_data)
