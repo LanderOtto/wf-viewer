@@ -75,7 +75,7 @@ def get_parser():
         "--format",
         choices=["html", "eps", "pdf", "png"],
         default=["html"],
-        nargs="*",
+        action="append",
         type=str,
         help="Report format: (default: html)",
     )
