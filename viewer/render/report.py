@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -25,6 +27,7 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
                         "NTasks": len(step.instances),
                         "Energy": step.get_energy(),
                         "Duration": step.get_duration(),
+                        "QueueTime": 0,
                         "Locations": ",".join(locs) if locs else None,
                     }
                 )
@@ -35,12 +38,17 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
                         raise ValueError(
                             f"Job {i}-{j} in step {step.name} has no end time"
                         )
+                    queue_time = job.get_queue_time()
                     data.append(
                         {
                             "Step": step.name,
                             "Start": workflow.start_date + job.start_time,
                             "Finish": workflow.start_date + job.end_time,
-                            "QueueTime": job.get_queue_time(),
+                            "QueueTime": (
+                                queue_time.total_seconds()
+                                if queue_time is not None
+                                else None
+                            ),
                             "Task": f"{step.name}_{j}",
                             "Energy": job.get_energy(),
                             "Duration": job.get_duration(),
@@ -53,7 +61,7 @@ def _create_dataframe(workflow: Workflow, grouping_mode: GroupingMode) -> pd.Dat
 
 
 def _format_energy(joules: float | None) -> str:
-    if joules is None:
+    if joules is None or math.isnan(joules):
         return "NaN Wh"
     elif joules == 0:
         return "0.0 Wh"

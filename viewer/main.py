@@ -4,7 +4,7 @@ import sys
 
 from viewer.cli.arguments import get_parser
 from viewer.cli.priority import (
-    create_cluster_info,
+    create_location,
     create_output_config,
     create_style_config,
 )
@@ -18,7 +18,7 @@ from viewer.translator.toil.manager import toil_create_workflow
 def _main(args) -> int:
     style_config = create_style_config(args)
     out_config = create_output_config(args)
-    locations_metadata = create_cluster_info(args)
+    locations_metadata = create_location(args)
 
     workflow = None
     match args.workflow_manager:

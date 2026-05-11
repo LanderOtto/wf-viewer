@@ -27,7 +27,7 @@ def get_parser():
         required=True,
     )
     input_group.add_argument(
-        "-c", "--clusters-info", type=str, default=None, help="Path to cluster info"
+        "-c", "--locations", type=str, default=None, help="Path to location info"
     )
 
     # --- Group: Styling ---

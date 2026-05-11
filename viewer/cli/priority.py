@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -7,40 +6,39 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
-from viewer.cli.schema import OutputConfig, StyleConfig
+from viewer.cli.schema import (
+    LocationType,
+    OutputConfig,
+    StyleConfig,
+    load_location_config,
+)
+from viewer.core.entity import Location, SlurmLocation
 from viewer.core.utils import get_path
 
 
-def create_cluster_info(args: argparse.Namespace) -> MutableMapping[str, Any]:
-    clusters = {}
-    if args.clusters_info:
-        cluster_path = Path(args.clusters_info).resolve()
-        with open(cluster_path) as f:
-            yaml_data = YAML().load(f)
-        for loc_name, path in yaml_data.items():
-            if Path(path).is_absolute():
-                abs_path = Path(path).resolve()
-            else:
-                abs_path = cluster_path.parent / path
-            with open(abs_path) as f:
-                # Assumption: supported only SLURM and
-                # the files are all produced executing `sacct --json --jobs [JOB_ID]`
-                for job in json.load(f)["jobs"]:
-                    energy = None
-                    for resource in job["tres"]["allocated"]:
-                        if resource["type"] == "energy":
-                            energy = resource["count"]
-                    if energy is None:
-                        print("Job", job["job_id"], "has no energy report")
-                    elif float(energy) < 0:
-                        raise Exception(f"Job {job['job_id']} has negative energy")
-                    clusters.setdefault(loc_name, {})
-                    clusters[loc_name][job["job_id"]] = {
-                        "queue_starttime": job["time"]["submission"],
-                        "queue_endtime": job["time"]["start"],
-                        "avg_energy": float(energy) if energy else None,  # Joule
-                    }
-    return clusters
+def get_location_class(loc_type: LocationType):
+    match loc_type:
+        case LocationType.SLURM:
+            return SlurmLocation
+        case _:
+            raise NotImplementedError(f"Location type {loc_type} not yet implemented.")
+
+
+def create_location(args) -> MutableMapping[str, Location]:
+    if not args.locations:
+        return {}
+
+    config_path = Path(args.locations).resolve()
+    location_config = load_location_config(str(config_path))
+
+    locations = {}
+    for name, loc_config in location_config.locations.items():
+        loc_class = get_location_class(loc_config.type)
+        instance = loc_class(name, loc_config)
+
+        instance.parse(config_path.parent)
+        locations[name] = instance
+    return locations
 
 
 def create_output_config(args: argparse.Namespace) -> OutputConfig:

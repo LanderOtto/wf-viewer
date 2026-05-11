@@ -15,6 +15,65 @@ class GroupingMode(str, Enum):
     AGGREGATE = "aggregate"
 
 
+class LocationType(str, Enum):
+    SLURM = "slurm"
+    PBS = "pbs"
+    FLUX = "flux"
+    UNKNOWN = "unknown"
+
+
+class LocationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: LocationType
+    file: str
+    command: str
+    # Maps Location Job ID -> StreamFlow Task Name
+    jobs: MutableMapping[str, str] = Field(default_factory=dict)
+
+
+class LocationInfoConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: str
+    locations: MutableMapping[str, LocationConfig]
+
+
+def load_location_config(file_path: str) -> LocationInfoConfig:
+    yaml_loader = YAML(typ="safe")
+    try:
+        with open(file_path) as f:
+            raw_data = yaml_loader.load(f) or {}
+        return LocationInfoConfig(**raw_data)
+    except ValidationError as e:
+        print(f"Error: Location configuration in '{file_path}' is invalid:")
+        for error in e.errors():
+            loc = " -> ".join(str(x) for x in error["loc"])
+            print(f"  [{loc}]: {error['msg']}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading location info file: {e}")
+        sys.exit(1)
+
+
+class OutputConfig:
+    def __init__(
+        self, outdir: str, filename: str, extension: MutableSequence[str]
+    ) -> None:
+        self.outdir: str = outdir
+        self.filename: str = filename
+        self.extension: MutableSequence[str] = extension
+
+    def get_filepath(self, extension: str, prefix: str = "", postfix: str = "") -> str:
+        filename = self.filename
+        if not filename.endswith(f".{extension}"):
+            filename = f"{prefix}{self.filename}{postfix}.{extension}"
+        return os.path.join(self.outdir, filename)
+
+    def get_statspath(self) -> str:
+        return os.path.join(self.outdir, f"{self.filename}.stats.json")
+
+
 class StyleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -44,21 +103,3 @@ def load_style_config(file_path: str) -> StyleConfig:
     except Exception as e:
         print(f"Error reading style file: {e}")
         sys.exit(1)
-
-
-class OutputConfig:
-    def __init__(
-        self, outdir: str, filename: str, extension: MutableSequence[str]
-    ) -> None:
-        self.outdir: str = outdir
-        self.filename: str = filename
-        self.extension: MutableSequence[str] = extension
-
-    def get_filepath(self, extension: str, prefix: str = "", postfix: str = "") -> str:
-        filename = self.filename
-        if not filename.endswith(f".{extension}"):
-            filename = f"{prefix}{self.filename}{postfix}.{extension}"
-        return os.path.join(self.outdir, filename)
-
-    def get_statspath(self) -> str:
-        return os.path.join(self.outdir, f"{self.filename}.stats.json")

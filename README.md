@@ -34,7 +34,7 @@ The `wf-viewer` utility uses the following structure:
 * `-i, --inputs <path>`: Path to input trace files. This flag can be passed multiple times to aggregate multiple execution logs. **(Required)**
 * `-t, --input-type {report, log}`: The format of the input file. **(Required)**
 * `-w, --wms {streamflow, cwltool, cwltoil}`: The Workflow Management System that generated the logs. **(Required)**
-* `-c, --clusters-info <path>`: Path to a YAML file with the information of the deployments. **(Optional)**
+* `-loc, --locations <path>`: Path to a YAML file with the information of the locations. **(Optional)**
 
 ### Style
 

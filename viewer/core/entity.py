@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
+from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, MutableSequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
+
+from viewer.cli.schema import LocationConfig
 
 
 class TaskStatus(Enum):
@@ -18,6 +24,62 @@ class Action:
 
     def get_duration(self) -> timedelta:
         return self.end_time - self.start_time
+
+
+@dataclass(frozen=True)
+class LocationJobStats:
+    location_job_id: str
+    streamflow_task_name: str
+    submit_time: timedelta
+    start_time: timedelta
+    end_time: timedelta
+    energy_joules: float | None = None
+
+
+class Location(ABC):
+    def __init__(self, name: str, config: LocationConfig) -> None:
+        self.name = name
+        self.config = config
+        self.jobs: MutableMapping[str, LocationJobStats] = {}
+
+    @abstractmethod
+    def parse(self, base_path: Path) -> None: ...
+
+
+class SlurmLocation(Location):
+    def parse(self, base_path: Path) -> None:
+        json_path = (base_path / self.config.file).resolve()
+
+        if not json_path.exists():
+            print(f"Warning: {self.name} metadata file not found at {json_path}")
+            return
+
+        with open(json_path) as f:
+            raw_data = json.load(f)
+            for job in raw_data.get("jobs", []):
+                jid = str(job["job_id"])
+
+                # Extract energy from TRES
+                energy = next(
+                    (
+                        r["count"]
+                        for r in job["tres"]["allocated"]
+                        if r["type"] == "energy"
+                    ),
+                    None,
+                )
+
+                if energy is not None and float(energy) < 0:
+                    raise ValueError(f"Negative energy detected for job {jid}")
+
+                self.jobs[jid] = LocationJobStats(
+                    location_job_id=jid,
+                    streamflow_task_name=self.config.jobs.get(jid, "unknown"),
+                    submit_time=timedelta(seconds=job["time"]["submission"]),
+                    start_time=timedelta(seconds=job["time"]["start"]),
+                    end_time=timedelta(seconds=job["time"]["end"]),
+                    energy_joules=float(energy) if energy else None,
+                )
 
 
 class Step:
@@ -90,11 +152,13 @@ class Task(Action):
         )
 
     def get_queue_time(self) -> timedelta | None:
-        return (
-            sum(q.end_time - q.start_time for q in self.queue_times)
-            if self.queue_times
-            else None
-        )
+        if self.queue_times:
+            acc = timedelta(0)
+            for q in self.queue_times:
+                acc += q.end_time - q.start_time
+            return acc
+        else:
+            return None
 
     def __str__(self) -> str:
         return f"{self.name} {self.start_time} {self.end_time} {self.get_location()}"

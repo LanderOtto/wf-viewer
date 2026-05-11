@@ -18,7 +18,7 @@ def sf_create_workflow(
         )
     input_path = get_path(paths[0])
     if input_type == "report":
-        return translate_report(input_path)
+        return translate_report(input_path, location_metadata)
     elif input_type == "log":
         return translate_log(input_path, location_metadata)
     else:
