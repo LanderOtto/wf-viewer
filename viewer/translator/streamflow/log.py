@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import io
 import os
 import posixpath
 import re
 from collections.abc import MutableMapping, MutableSequence
 from pathlib import PurePath
-from typing import Any
 
-from viewer.core.entity import Action, Step, Task, Workflow
+from ruamel.yaml import YAML
+
+from viewer.cli.schema import LocationConfig, LocationInfoConfig, LocationType
+from viewer.core.entity import Action, Location, Step, Task, Workflow
 from viewer.core.utils import str_to_datetime
 
 
@@ -74,7 +77,7 @@ def _get_copy_info(
 
 
 def translate_log(
-    filepath: str, location_metadata: MutableMapping[str, Any]
+    filepath: str, location_metadata: MutableMapping[str, Location]
 ) -> Workflow:
     workflow_start, workflow_end, workflow_name = (None for _ in range(3))
     deployments = []
@@ -102,7 +105,7 @@ def translate_log(
                 job_inputs_interval[job_input_name] = "{"
                 job_input_reading = True
             if match := re.search(
-                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+Processing\s+workflow\s+(?P<workflow_id>[\w-]+)$",
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+Processing\s+workflow\s+(?P<workflow_id>\S+)$",
                 sentence,
             ):
                 if workflow_start is not None:
@@ -161,11 +164,29 @@ def translate_log(
                         service = None
                 step.instances.append(
                     Task(
-                        start=str_to_datetime(match.group("timestamp"))
-                        - workflow_start,
+                        start=(
+                            str_to_datetime(match.group("timestamp")) - workflow_start
+                        ),
                         end=None,
                         deployment=deployment,
                         service=service,
+                        name=match.group("job_name"),
+                    )
+                )
+            elif match := re.search(
+                r"^(?P<timestamp>[\d-]+\s[\d:.]+)\s+INFO\s+Evaluating\s+expression\s+for\s+step\s+(?P<step_name>\S+)\s+\(job\s+(?P<job_name>[^)]+)\)$",
+                sentence,
+            ):
+                step_name = match.group("step_name")
+                step = steps.setdefault(step_name, Step(step_name, []))
+                step.instances.append(
+                    Task(
+                        start=(
+                            str_to_datetime(match.group("timestamp")) - workflow_start
+                        ),
+                        end=None,
+                        deployment="local",
+                        service=None,
                         name=match.group("job_name"),
                     )
                 )
@@ -201,36 +222,47 @@ def translate_log(
                         "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
                     )
             elif match := re.search(
-                r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+INFO\s+Scheduled job (?P<streamflow_job>[\w\-/]+) with job id (?P<slurm_job>\d+)",
+                r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+INFO\s+Scheduled job (?P<streamflow_job>[\w\-/.]+) with job id (?P<location_job>\d+)",
                 sentence,
             ):
                 streamflow_job = match.group("streamflow_job")
                 if (step_name := os.path.dirname(streamflow_job)) in steps.keys():
                     for instance in steps[step_name].instances:
                         if instance.name == streamflow_job:
-                            slurm_job = int(match.group("slurm_job"))
+                            location_job = match.group("location_job")
                             if instance.deployment in location_metadata.keys():
-                                queue_start = location_metadata[instance.deployment][
-                                    slurm_job
-                                ]["queue_starttime"]
-                                queue_end = location_metadata[instance.deployment][
-                                    slurm_job
-                                ]["queue_endtime"]
+                                queue_start = (
+                                    location_metadata[instance.deployment]
+                                    .jobs[location_job]
+                                    .submit_time
+                                )
+                                queue_end = (
+                                    location_metadata[instance.deployment]
+                                    .jobs[location_job]
+                                    .start_time
+                                )
                                 instance.queue_times.append(
                                     Action(queue_start, queue_end)
                                 )
-                                instance.energy = location_metadata[
-                                    instance.deployment
-                                ][slurm_job]["avg_energy"]
+                                instance.energy = (
+                                    location_metadata[instance.deployment]
+                                    .jobs[location_job]
+                                    .energy_joules
+                                )
                             else:
                                 unknown_jobs_info.setdefault(
                                     instance.deployment, []
-                                ).append(str(slurm_job))
-            try:
-                if (tmp_timestamp := str_to_datetime(" ".join(words[:2]))) is not None:
-                    last_timestamp = tmp_timestamp
-            except Exception:
-                pass
+                                ).append((str(location_job), streamflow_job))
+            if match := re.search(
+                r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}).*$",
+                sentence,
+            ):
+                last_timestamp = str_to_datetime(match.group("timestamp"))
+            # try:
+            #     if (tmp_timestamp := str_to_datetime(" ".join(words[:2]))) is not None:
+            #         last_timestamp = tmp_timestamp
+            # except Exception:
+            #     pass
     if workflow_end is None:
         print(
             "WARNING: the workflow end time is missing. "
@@ -251,13 +283,32 @@ def translate_log(
                 "(Note: StreamFlow log in debug mode is required to retrieve all necessary information."
             )
 
-    if unknown_jobs_info:
+    if not location_metadata:
+        locations = {}
+        for loc, jobs in unknown_jobs_info.items():
+            locations[loc] = LocationConfig(
+                type=LocationType.UNKNOWN,
+                command=f"sacct --json --jobs {','.join((s for s, _ in jobs))} > {loc}_info.json",
+                file=f"{loc}_info.json",
+                jobs={slurm: sf for slurm, sf in jobs},
+            )
+        yaml_ = YAML(typ="rt")
+        yaml_.indent(mapping=2, sequence=4, offset=2)
+        stream = io.StringIO()
+        yaml_.dump(
+            LocationInfoConfig(version="v1.0", locations=locations).model_dump(
+                mode="json"
+            ),
+            stream,
+        )
+        print(f"Generated template location file:\n{stream.getvalue()}")
+    elif unknown_jobs_info:
         print(
             "WARNING: Missing jobs info in some locations execute the following command in the locations"
         )
         for loc, jobs in unknown_jobs_info.items():
             print(
-                f"Location {loc}: `sacct --json --jobs {','.join(jobs)} > {loc}_info.json`"
+                f"Location {loc}: `sacct --json --jobs {','.join((s for s, _ in jobs))} > {loc}_info.json`"
             )
 
     # for copy_info in file_copies.values():
