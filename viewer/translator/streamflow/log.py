@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import io
 import os
 import posixpath
 import re
+import sys
 from collections.abc import MutableMapping, MutableSequence
 from pathlib import PurePath
 
@@ -287,21 +287,20 @@ def translate_log(
         locations = {}
         for loc, jobs in unknown_jobs_info.items():
             locations[loc] = LocationConfig(
-                type=LocationType.UNKNOWN,
+                type=LocationType.SLURM,
                 command=f"sacct --json --jobs {','.join((s for s, _ in jobs))} > {loc}_info.json",
                 file=f"{loc}_info.json",
                 jobs={slurm: sf for slurm, sf in jobs},
             )
+        print("Generated template `clusters_info.yml` file:")
         yaml_ = YAML(typ="rt")
         yaml_.indent(mapping=2, sequence=4, offset=2)
-        stream = io.StringIO()
         yaml_.dump(
             LocationInfoConfig(version="v1.0", locations=locations).model_dump(
                 mode="json"
             ),
-            stream,
+            sys.stdout,
         )
-        print(f"Generated template location file:\n{stream.getvalue()}")
     elif unknown_jobs_info:
         print(
             "WARNING: Missing jobs info in some locations execute the following command in the locations"
