@@ -65,9 +65,9 @@ def get_step_metrics(step: Step) -> MutableMapping[str, Any]:
     durations = [task.get_duration() for task in step.instances if task.get_duration()]
     duration_total = step.get_duration()
 
-    metrics = {
+    metrics: MutableMapping[str, Any] = {
         "name": step.name,
-        "instances_count": len(step.instances),
+        "n_of_tasks": len(step.instances),
         "total_exec_seconds": duration_total.total_seconds(),
         "instance_metrics": None,
     }
@@ -75,21 +75,44 @@ def get_step_metrics(step: Step) -> MutableMapping[str, Any]:
     if len(step.instances) > 1:
         instance_starts = [inst.start_time for inst in step.instances]
         deploy_time = max(instance_starts) - min(instance_starts)
+        queue_times = [
+            q.get_duration().total_seconds()
+            for task in step.instances
+            for q in task.queue_times
+        ]
 
         metrics["instance_metrics"] = {
             "deploy_time_seconds": deploy_time.total_seconds(),
-            "min_seconds": (
-                min(d.total_seconds() for d in durations) if durations else 0
-            ),
-            "max_seconds": (
-                max(d.total_seconds() for d in durations) if durations else 0
-            ),
-            "avg_seconds": (
-                statistics.mean(d.total_seconds() for d in durations)
-                if durations
-                else 0
-            ),
+            "executions": {
+                "min_seconds": (
+                    min(d.total_seconds() for d in durations) if durations else 0
+                ),
+                "max_seconds": (
+                    max(d.total_seconds() for d in durations) if durations else 0
+                ),
+                "avg_seconds": (
+                    statistics.mean(d.total_seconds() for d in durations)
+                    if durations
+                    else 0
+                ),
+            },
+            "queues": {
+                "min_seconds": (min(queue_times) if queue_times else 0),
+                "max_seconds": (max(queue_times) if queue_times else 0),
+                "avg_seconds": (statistics.mean(queue_times) if queue_times else 0),
+            },
         }
+    else:
+        queue_time = next(
+            (
+                q.get_duration().total_seconds()
+                for task in step.instances
+                for q in task.queue_times
+            ),
+            None,
+        )
+        metrics["queue_time_seconds"] = queue_time
+
     return metrics
 
 
@@ -97,19 +120,25 @@ def print_terminal_report(data: dict[str, Any]):
     """Prints a clean, formatted report to the terminal."""
     for step in data["steps"]:
         print(f"\n{'#' * 40}")
-        print(f"Step:           {step['name']}")
-        print(f"Instances:      {step['instances_count']}")
-        print(f"Total Exec:     {step['total_exec_seconds']:.4f}s")
+        print(f"Step:\t\t\t{step['name']}")
+        print(f"Tasks:\t\t\t{step['n_of_tasks']}")
+        print(f"Total Exec:\t\t{step['total_exec_seconds']:.4f}s")
         if metrics := step["instance_metrics"]:
-            print(f"Deploy Time:    {metrics['deploy_time_seconds']:.4f}s")
+            print(f"Deploy Time:\t{metrics['deploy_time_seconds']:.4f}s")
             print(
-                f"Range [m/M]:    {metrics['min_seconds']:.4f}s / {metrics['max_seconds']:.4f}s"
+                f"Execution times:\n\tRange [m/M]:\t{metrics['executions']['min_seconds']:.4f}s / {metrics['executions']['max_seconds']:.4f}s"
             )
-            print(f"Average:        {metrics['avg_seconds']:.4f}s")
+            print(f"\tAverage:\t\t{metrics['executions']['avg_seconds']:.4f}s")
+            print(
+                f"Queue times:\n\tRange [m/M]:\t{metrics['queues']['min_seconds']:.4f}s / {metrics['queues']['max_seconds']:.4f}s"
+            )
+            print(f"\tAverage:\t\t{metrics['queues']['avg_seconds']:.4f}s")
+        elif step["queue_time_seconds"] is not None:
+            print(f"Queue time:\t\t{step['queue_time_seconds']:.4f}s")
 
     print(f"\n{'=' * 40}")
     print("WORKFLOW SUMMARY")
-    print(f"Total Steps:    {data['workflow']['total_instances']}")
+    print(f"Total Steps:    {data['workflow']['total_tasks']}")
     print(f"Start:          {data['workflow']['start']}")
     print(f"End:            {data['workflow']['end']}")
     print(f"Total Duration: {data['workflow']['duration_seconds']:.4f}s")
@@ -126,7 +155,7 @@ def create_stats(
         steps_data = [
             get_step_metrics(s) for s in sorted(workflow.steps, key=lambda s: s.name)
         ]
-        total_instances = sum(s["instances_count"] for s in steps_data)
+        total_tasks = sum(s["n_of_tasks"] for s in steps_data)
         duration = (
             workflow.end_date - workflow.start_date
             if workflow.end_date
@@ -135,7 +164,7 @@ def create_stats(
 
         report_data = {
             "workflow": {
-                "total_instances": total_instances,
+                "total_tasks": total_tasks,
                 "start": str(workflow.start_date),
                 "end": str(workflow.end_date),
                 "duration_seconds": duration.total_seconds(),

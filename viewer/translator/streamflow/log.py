@@ -295,6 +295,7 @@ def translate_log(
         print("Generated template `clusters_info.yml` file:")
         yaml_ = YAML(typ="rt")
         yaml_.indent(mapping=2, sequence=4, offset=2)
+        yaml_.width = 4096
         yaml_.dump(
             LocationInfoConfig(version="v1.0", locations=locations).model_dump(
                 mode="json"
