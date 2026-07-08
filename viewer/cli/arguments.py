@@ -55,7 +55,11 @@ def get_parser():
         "-g",
         "--group-by",
         dest="grouping_mode",
-        choices=[GroupingMode.TASK, GroupingMode.STEP, GroupingMode.AGGREGATE],
+        choices=[
+            GroupingMode.TASK.name.lower(),
+            GroupingMode.STEP.name.lower(),
+            GroupingMode.AGGREGATE.name.lower(),
+        ],
         default=None,
     )
     style_group.add_argument(
@@ -74,7 +78,6 @@ def get_parser():
         "-f",
         "--format",
         choices=["html", "eps", "pdf", "png"],
-        default=["html"],
         action="append",
         type=str,
         help="Report format: (default: html)",

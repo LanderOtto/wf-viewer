@@ -58,11 +58,13 @@ def load_location_config(file_path: str) -> LocationInfoConfig:
 
 class OutputConfig:
     def __init__(
-        self, outdir: str, filename: str, extension: MutableSequence[str]
+        self, outdir: str, filename: str, extension: MutableSequence[str] | None
     ) -> None:
         self.outdir: str = outdir
         self.filename: str = filename
-        self.extension: MutableSequence[str] = extension
+        self.extension: MutableSequence[str] = extension or []
+        if not self.extension:
+            self.extension.append("html")
 
     def get_filepath(self, extension: str, prefix: str = "", postfix: str = "") -> str:
         filename = self.filename
